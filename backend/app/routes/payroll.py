@@ -1986,7 +1986,8 @@ def save_attendance(payroll_id):
                         per_hour = (ot_base / working_days) / 8
                     else:
                         per_hour = 0
-                    entry.ot_amount = round(per_hour * entry.ot_hours * rate_multiplier)
+                    # Keep 2 decimals so half-day OT (e.g. 14.5 days) isn't lost.
+                    entry.ot_amount = round(per_hour * entry.ot_hours * rate_multiplier, 2)
                 else:
                     if _ovr_daily:
                         per_day = _ovr_daily
@@ -1994,7 +1995,7 @@ def save_attendance(payroll_id):
                         per_day = ot_base / working_days
                     else:
                         per_day = 0
-                    entry.ot_amount = round(per_day * entry.ot_hours * rate_multiplier)
+                    entry.ot_amount = round(per_day * entry.ot_hours * rate_multiplier, 2)
 
             entry.total_earnings = entry.earned_gross + entry.ot_amount + entry.arrear_amount
 
@@ -2150,7 +2151,7 @@ def save_attendance(payroll_id):
             if not is_fixed_salary:
                 if is_daily_wages and wo_policy == 'ot_rate' and wo_ot_days > 0 and _eff_daily_rate:
                     wo_rate_multiplier = 2.0 if config.ot_rate_type == 'double' else 1.0
-                    entry.ot_amount = round(_eff_daily_rate * wo_ot_days * wo_rate_multiplier)
+                    entry.ot_amount = round(_eff_daily_rate * wo_ot_days * wo_rate_multiplier, 2)
 
                 if config.ot_applicable and entry.ot_hours > 0 and working_days > 0 and not emp.ot_exempt:
                     rate_multiplier = 2.0 if config.ot_rate_type == 'double' else 1.0
@@ -2171,13 +2172,13 @@ def save_attendance(payroll_id):
                             per_hour = _eff_daily_rate / 8
                         else:
                             per_hour = (ot_base / working_days) / 8
-                        entry.ot_amount += round(per_hour * entry.ot_hours * rate_multiplier)
+                        entry.ot_amount += round(per_hour * entry.ot_hours * rate_multiplier, 2)
                     else:
                         if is_daily_wages and _eff_daily_rate:
                             per_day = _eff_daily_rate
                         else:
                             per_day = ot_base / working_days
-                        entry.ot_amount += round(per_day * entry.ot_hours * rate_multiplier)
+                        entry.ot_amount += round(per_day * entry.ot_hours * rate_multiplier, 2)
             else:
                 entry.paid_holidays = 0
 
