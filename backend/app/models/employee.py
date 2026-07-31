@@ -47,6 +47,9 @@ class Employee(db.Model):
     # Statutory Applicability (per-employee overrides)
     esic_exempt = db.Column(db.Boolean, default=False)            # True = skip ESIC for this employee
     esic_exemption_reason = db.Column(db.String(200), nullable=True)  # Why exempted (client request, wages above ceiling, etc.)
+    epf_exempt = db.Column(db.Boolean, default=False)            # True = skip EPF/PF for this employee
+    epf_exemption_reason = db.Column(db.String(200), nullable=True)  # Why exempted (already member elsewhere, excluded employee, etc.)
+    ot_exempt = db.Column(db.Boolean, default=False)            # True = this employee is not eligible for OT
 
     # Employment Details (update later)
     designation = db.Column(db.String(100), nullable=True)

@@ -2721,6 +2721,11 @@ def _build_ecr_data(payroll_id):
     skipped = []
     for entry in entries:
         emp = entry.employee
+        # Skip EPF-exempt employees — they have no EPF contribution, so they
+        # must not appear in the ECR at all.
+        if getattr(emp, 'epf_exempt', False):
+            skipped.append({'name': emp.name, 'reason': 'EPF exempt'})
+            continue
         # Skip employees without UAN (EPF requires UAN)
         if not emp.uan_number:
             skipped.append({'name': emp.name, 'reason': 'No UAN assigned'})

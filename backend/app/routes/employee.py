@@ -333,7 +333,16 @@ def _save_personal_fields(emp):
 
 
 def _save_statutory_flags(emp, config):
-    """Save EPF/ESIC/OT per-employee flags."""
+    """Save EPF/ESIC/OT per-employee flags. A ticked card = applicable;
+    unticked = exempt for this employee."""
+    if config and config.epf_applicable:
+        epf_checked = 'epf_for_employee' in request.form
+        emp.epf_exempt = not epf_checked
+        if emp.epf_exempt:
+            emp.epf_exemption_reason = request.form.get('epf_exemption_reason', '').strip() or None
+        else:
+            emp.epf_exemption_reason = None
+
     if config and config.esic_applicable:
         esic_checked = 'esic_for_employee' in request.form
         emp.esic_exempt = not esic_checked
@@ -341,6 +350,9 @@ def _save_statutory_flags(emp, config):
             emp.esic_exemption_reason = request.form.get('esic_exemption_reason', '').strip() or None
         else:
             emp.esic_exemption_reason = None
+
+    if config and config.ot_applicable:
+        emp.ot_exempt = 'ot_for_employee' not in request.form
 
 
 def _render_form(mode, emp=None, establishments=None, preselect_est='', est_id=None, **extra):

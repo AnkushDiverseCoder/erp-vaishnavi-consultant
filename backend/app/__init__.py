@@ -839,6 +839,10 @@ def _auto_migrate_columns(db):
         "ALTER TABLE app_users ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN NOT NULL DEFAULT FALSE",
         "ALTER TABLE app_users ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMP",
         "ALTER TABLE app_users ADD COLUMN IF NOT EXISTS temp_password VARCHAR(100)",
+        # Per-employee EPF/OT statutory overrides (ESIC already existed)
+        "ALTER TABLE employees ADD COLUMN IF NOT EXISTS epf_exempt BOOLEAN DEFAULT FALSE",
+        "ALTER TABLE employees ADD COLUMN IF NOT EXISTS epf_exemption_reason VARCHAR(200)",
+        "ALTER TABLE employees ADD COLUMN IF NOT EXISTS ot_exempt BOOLEAN DEFAULT FALSE",
     ]:
         try:
             db.session.execute(db.text(ddl))

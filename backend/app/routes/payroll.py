@@ -454,7 +454,14 @@ def employee_salary(emp_id):
         if not new_salary.id:
             db.session.add(new_salary)
 
-        # Save per-employee statutory overrides (EPF/ESIC checkboxes)
+        # Save per-employee statutory overrides (EPF/ESIC/OT checkboxes)
+        if config.epf_applicable:
+            epf_checked = 'epf_for_employee' in request.form
+            employee.epf_exempt = not epf_checked
+            if employee.epf_exempt:
+                employee.epf_exemption_reason = request.form.get('epf_exemption_reason', '').strip() or None
+            else:
+                employee.epf_exemption_reason = None
         if config.esic_applicable:
             esic_checked = 'esic_for_employee' in request.form
             employee.esic_exempt = not esic_checked
@@ -462,6 +469,8 @@ def employee_salary(emp_id):
                 employee.esic_exemption_reason = request.form.get('esic_exemption_reason', '').strip() or None
             else:
                 employee.esic_exemption_reason = None
+        if config.ot_applicable:
+            employee.ot_exempt = 'ot_for_employee' not in request.form
 
         log_activity('updated', 'salary', entity_id=emp_id,
                      entity_name=employee.name,
@@ -1955,7 +1964,7 @@ def save_attendance(payroll_id):
 
             # OT: use config rates (statutory) but template rate for base
             entry.ot_amount = 0
-            if entry.ot_hours and entry.ot_hours > 0 and working_days > 0:
+            if entry.ot_hours and entry.ot_hours > 0 and working_days > 0 and not emp.ot_exempt:
                 rate_multiplier = 2.0 if getattr(config, 'ot_rate_type', 'double') == 'double' else 1.0
                 ot_unit = getattr(config, 'ot_unit', 'hours')
 
@@ -2143,7 +2152,7 @@ def save_attendance(payroll_id):
                     wo_rate_multiplier = 2.0 if config.ot_rate_type == 'double' else 1.0
                     entry.ot_amount = round(_eff_daily_rate * wo_ot_days * wo_rate_multiplier)
 
-                if config.ot_applicable and entry.ot_hours > 0 and working_days > 0:
+                if config.ot_applicable and entry.ot_hours > 0 and working_days > 0 and not emp.ot_exempt:
                     rate_multiplier = 2.0 if config.ot_rate_type == 'double' else 1.0
 
                     # Determine OT base: full gross (default) or Basic only
@@ -2246,7 +2255,9 @@ def save_attendance(payroll_id):
         entry.epf_employer = 0
         entry.epf_wages = 0
 
-        if config.epf_applicable:
+        # Skip EPF entirely for employees flagged EPF-exempt at the employee
+        # level (e.g. already an EPF member elsewhere / excluded employee).
+        if config.epf_applicable and not emp.epf_exempt:
             # ── STATUTORY EPF WAGE RULES ────────────────────────────────
             # EPF (12%)      : base varies — full wages if 'higher' deduction,
             #                  else capped at establishment's epf_wage_ceiling

@@ -444,8 +444,8 @@
 
             <div style="margin-top:12px; display:flex; flex-wrap:wrap; gap:6px;">
                 {% if config and config.epf_applicable %}
-                <label class="stat-card checked" id="chkEpf" onclick="toggleStat('epf')">
-                    <input type="checkbox" name="epf_for_employee" value="1" checked style="display:none;">
+                <label class="stat-card {% if not (emp and emp.epf_exempt) %}checked{% endif %}" id="chkEpf" onclick="toggleStat('epf')">
+                    <input type="checkbox" name="epf_for_employee" value="1" {% if not (emp and emp.epf_exempt) %}checked{% endif %} style="display:none;">
                     <div class="stat-tick"><i class="bi bi-check-lg"></i></div>
                     <i class="bi bi-shield-check"></i> EPF
                 </label>
@@ -458,13 +458,25 @@
                 </label>
                 {% endif %}
                 {% if config and config.ot_applicable %}
-                <label class="stat-card checked" id="chkOt" onclick="toggleStat('ot')">
-                    <input type="checkbox" name="ot_for_employee" value="1" checked style="display:none;">
+                <label class="stat-card {% if not (emp and emp.ot_exempt) %}checked{% endif %}" id="chkOt" onclick="toggleStat('ot')">
+                    <input type="checkbox" name="ot_for_employee" value="1" {% if not (emp and emp.ot_exempt) %}checked{% endif %} style="display:none;">
                     <div class="stat-tick"><i class="bi bi-check-lg"></i></div>
                     <i class="bi bi-clock-history"></i> Overtime
                 </label>
                 {% endif %}
             </div>
+
+            <!-- EPF Exemption -->
+            {% if config and config.epf_applicable %}
+            <div id="epfExemptDiv" style="display:{% if emp and emp.epf_exempt %}block{% else %}none{% endif %}; margin-top:10px;">
+                <div class="config-sub" style="border-color:#fecaca; background:#fef2f2;">
+                    <label class="form-label" style="font-size:0.78rem; color:#dc2626;">EPF Exemption Reason</label>
+                    <input type="text" name="epf_exemption_reason" class="form-control form-control-sm" style="max-width:400px;"
+                           placeholder="e.g., Already an EPF member elsewhere, Excluded employee"
+                           value="{{ emp.epf_exemption_reason or '' if emp else '' }}">
+                </div>
+            </div>
+            {% endif %}
 
             <!-- ESIC Exemption -->
             {% if config and config.esic_applicable %}
@@ -995,6 +1007,10 @@
         var cb = el.querySelector('input[type=checkbox]');
         cb.checked = !cb.checked;
         el.classList.toggle('checked', cb.checked);
+        if (type === 'epf') {
+            var d = document.getElementById('epfExemptDiv');
+            if (d) d.style.display = cb.checked ? 'none' : 'block';
+        }
         if (type === 'esic') {
             var d = document.getElementById('esicExemptDiv');
             if (d) d.style.display = cb.checked ? 'none' : 'block';
