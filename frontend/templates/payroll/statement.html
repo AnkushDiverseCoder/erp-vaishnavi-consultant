@@ -243,10 +243,10 @@
                     {% for head in heads %}
                     <th rowspan="2" title="{{ head.name }}">{{ head.short_code }}</th>
                     {% endfor %}
-                    <th rowspan="2" style="background:#dcfce7;">Earned<br>Gross</th>
                     {% if config.ot_applicable %}
                     <th rowspan="2">OT</th>
                     {% endif %}
+                    <th rowspan="2" style="background:#dcfce7;">Earned<br>Gross</th>
                     {% if config.epf_applicable %}
                     <th rowspan="2" style="background:#fef3c7;">EPF<br>EE</th>
                     {% endif %}
@@ -303,10 +303,10 @@
                     </td>
                     {% endfor %}
 
-                    <td class="text-right" style="font-weight:600; background:#f0fdf4;">{{ "{:,.0f}".format(entry.earned_gross) }}</td>
                     {% if config.ot_applicable %}
                     <td class="text-right">{{ "{:,.0f}".format(entry.ot_amount) }}</td>
                     {% endif %}
+                    <td class="text-right" style="font-weight:600; background:#f0fdf4;">{{ "{:,.0f}".format(entry.earned_gross + entry.ot_amount) }}</td>
                     {% if config.epf_applicable %}
                     <td class="text-right" style="color:#dc2626;">{{ "{:,.0f}".format(entry.epf_employee) }}</td>
                     {% endif %}
@@ -345,10 +345,10 @@
                     {% for head in heads %}
                     <td class="text-right">{{ "{:,.0f}".format(head_totals.get(head.id, 0)) }}</td>
                     {% endfor %}
-                    <td class="text-right" style="background:#f0fdf4;">{{ "{:,.0f}".format(ns.t_earned) }}</td>
                     {% if config.ot_applicable %}
                     <td class="text-right">{{ "{:,.0f}".format(ns.t_ot) }}</td>
                     {% endif %}
+                    <td class="text-right" style="background:#f0fdf4;">{{ "{:,.0f}".format(ns.t_earned + ns.t_ot) }}</td>
                     {% if config.epf_applicable %}
                     <td class="text-right" style="color:#dc2626;">{{ "{:,.0f}".format(ns.t_epf_ee) }}</td>
                     {% endif %}
