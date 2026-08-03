@@ -210,11 +210,11 @@
                 <td class="text-right">{{ row.basic|int }}</td>
                 <td class="text-right">{{ row.spl_basic|int }}</td>
                 <td class="text-right">{{ row.da|int }}</td>
-                <td class="text-right">{{ row.ot_amount|int if row.ot_amount == row.ot_amount|int else "%.2f"|format(row.ot_amount) }}</td>
+                <td class="text-right">{{ row.ot_amount|int }}</td>
                 <td class="text-right">{{ row.hra|int }}</td>
                 <td class="text-right">{{ row.others|int }}</td>
                 <td class="text-right">{{ row.nph|int }}</td>
-                <td class="text-right gross-col">{{ "{:,.0f}".format(row.gross) if row.gross == row.gross|int else "{:,.2f}".format(row.gross) }}</td>
+                <td class="text-right gross-col">{{ "{:,.0f}".format(row.gross) }}</td>
                 <td class="text-right">{{ row.pf|int }}</td>
                 <td class="text-right">{{ row.esic|int }}</td>
                 <td class="text-right">{{ row.pt|int }}</td>
@@ -223,7 +223,7 @@
                 <td class="text-right">{{ row.lwf|int }}</td>
                 <td class="text-right">{{ row.recoveries|int }}</td>
                 <td class="text-right" style="font-weight:600;">{{ row.total_ded|int }}</td>
-                <td class="text-right net-col">{{ "{:,.0f}".format(row.net_pay) if row.net_pay == row.net_pay|int else "{:,.2f}".format(row.net_pay) }}</td>
+                <td class="text-right net-col">{{ "{:,.0f}".format(row.net_pay) }}</td>
                 <td></td>
                 <td></td>
                 <td></td>
@@ -259,11 +259,11 @@
                 <td class="text-right">{{ ns.t_basic|int }}</td>
                 <td class="text-right">{{ ns.t_spl|int }}</td>
                 <td class="text-right">{{ ns.t_da|int }}</td>
-                <td class="text-right">{{ ns.t_ot_amt|int if ns.t_ot_amt == ns.t_ot_amt|int else "%.2f"|format(ns.t_ot_amt) }}</td>
+                <td class="text-right">{{ ns.t_ot_amt|int }}</td>
                 <td class="text-right">{{ ns.t_hra|int }}</td>
                 <td class="text-right">{{ ns.t_others|int }}</td>
                 <td class="text-right">{{ ns.t_nph|int }}</td>
-                <td class="text-right gross-col">{{ "{:,.0f}".format(ns.t_gross) if ns.t_gross == ns.t_gross|int else "{:,.2f}".format(ns.t_gross) }}</td>
+                <td class="text-right gross-col">{{ "{:,.0f}".format(ns.t_gross) }}</td>
                 <td class="text-right">{{ ns.t_pf|int }}</td>
                 <td class="text-right">{{ ns.t_esic|int }}</td>
                 <td class="text-right">{{ ns.t_pt|int }}</td>
@@ -272,7 +272,7 @@
                 <td class="text-right">0</td>
                 <td class="text-right">{{ ns.t_rec|int }}</td>
                 <td class="text-right">{{ ns.t_total_ded|int }}</td>
-                <td class="text-right net-col">{{ "{:,.0f}".format(ns.t_net) if ns.t_net == ns.t_net|int else "{:,.2f}".format(ns.t_net) }}</td>
+                <td class="text-right net-col">{{ "{:,.0f}".format(ns.t_net) }}</td>
                 <td></td>
                 <td></td>
                 <td></td>

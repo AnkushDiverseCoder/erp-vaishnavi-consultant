@@ -542,7 +542,7 @@
                                 {% if sal.salary_type == 'daily_wages' %}
                                     {{ "₹{:,.2f}".format(sal.daily_rate or 0) }}/day
                                 {% else %}
-                                    {{ "₹{:,.2f}".format(sal.gross_salary or 0) }}
+                                    {{ "₹{:,.0f}".format(sal.gross_salary or 0) }}
                                 {% endif %}
                             </td>
                             <td style="text-align:center;">
