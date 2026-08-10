@@ -125,6 +125,37 @@
                     <small class="text-muted">1 = standard (default). E.g. 26 → cycle runs 26th prev month to 25th current month.</small>
                 </div>
             </div>
+
+            <!-- Full Monthly Salary (LOP) mode -->
+            <div class="mt-3 p-3" style="background:#eff6ff; border:1px solid #bfdbfe; border-radius:10px;">
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" role="switch"
+                           name="monthly_full_salary" id="monthlyFullSalary"
+                           onchange="toggleLopDiv()"
+                           {% if config and config.monthly_full_salary %}checked{% endif %}>
+                    <label class="form-check-label fw-600" for="monthlyFullSalary" style="font-weight:600;">
+                        Pay <strong>Full Monthly Salary</strong> when present all working days
+                        <span class="badge bg-primary-soft" style="font-size:0.6rem;">Monthly salary only</span>
+                    </label>
+                </div>
+                <div class="text-muted" style="font-size:0.76rem; margin-top:6px;">
+                    ON: an employee present on every working day gets the <strong>full monthly gross</strong>,
+                    no matter how many weekly-rests fall in the month. Only <strong>genuine absent days</strong>
+                    are deducted, at <em>Gross ÷ the divisor below</em>. OFF (default): salary is prorated by
+                    paid days (present + paid weekly-off + holidays) ÷ Working Days Basis.
+                </div>
+                <div class="row g-3 mt-1" id="lopDivDiv" style="{% if not (config and config.monthly_full_salary) %}display:none;{% endif %}">
+                    <div class="col-md-6">
+                        <label class="form-label" style="font-size:0.8rem;">Absent-day deduction = Gross ÷</label>
+                        <select name="lop_divisor" class="form-select form-select-sm">
+                            <option value="calendar" {% if not config or config.lop_divisor == 'calendar' %}selected{% endif %}>Calendar Days in the month (28/30/31) — recommended</option>
+                            <option value="26" {% if config and config.lop_divisor == '26' %}selected{% endif %}>Fixed 26</option>
+                            <option value="30" {% if config and config.lop_divisor == '30' %}selected{% endif %}>Fixed 30</option>
+                        </select>
+                        <small class="text-muted">e.g. ₹19,800 ÷ 31 = ₹638.71 deducted per absent day (calendar basis for a 31-day month).</small>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!-- Compliance Basis -->
@@ -615,6 +646,10 @@
     function toggleCustomDays() {
         var basis = document.getElementById('workingDaysBasis').value;
         document.getElementById('customDaysDiv').style.display = basis === 'custom' ? 'block' : 'none';
+    }
+    function toggleLopDiv() {
+        var on = document.getElementById('monthlyFullSalary').checked;
+        document.getElementById('lopDivDiv').style.display = on ? 'flex' : 'none';
     }
     function toggleOT() {
         document.getElementById('otSettings').style.display =

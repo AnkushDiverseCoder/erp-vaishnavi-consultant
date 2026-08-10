@@ -843,6 +843,9 @@ def _auto_migrate_columns(db):
         "ALTER TABLE employees ADD COLUMN IF NOT EXISTS epf_exempt BOOLEAN DEFAULT FALSE",
         "ALTER TABLE employees ADD COLUMN IF NOT EXISTS epf_exemption_reason VARCHAR(200)",
         "ALTER TABLE employees ADD COLUMN IF NOT EXISTS ot_exempt BOOLEAN DEFAULT FALSE",
+        # Monthly full-salary (LOP) mode
+        "ALTER TABLE payroll_configs ADD COLUMN IF NOT EXISTS monthly_full_salary BOOLEAN DEFAULT FALSE",
+        "ALTER TABLE payroll_configs ADD COLUMN IF NOT EXISTS lop_divisor VARCHAR(10) NOT NULL DEFAULT 'calendar'",
     ]:
         try:
             db.session.execute(db.text(ddl))

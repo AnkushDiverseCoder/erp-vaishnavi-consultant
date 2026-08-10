@@ -28,6 +28,16 @@ class PayrollConfig(db.Model):
     working_days_basis = db.Column(db.String(15), nullable=False, default='calendar')
     custom_working_days = db.Column(db.Integer, nullable=True)  # Only if working_days_basis = 'custom'
 
+    # --- Monthly "Full Salary" (Loss-of-Pay) mode ---
+    # When ON, a monthly-salaried employee present on ALL their working days is
+    # paid the FULL monthly gross regardless of how many weekly-rests fall in
+    # the month; each genuine absent day deducts one day's pay at
+    # (gross ÷ lop_divisor). When OFF (default) the existing prorate-by-paid-days
+    # calculation is used unchanged. Applies to monthly salary only (not daily).
+    monthly_full_salary = db.Column(db.Boolean, default=False)
+    # Per-absent-day deduction basis: 'calendar' = ÷ days-in-month, '26', '30'.
+    lop_divisor = db.Column(db.String(10), nullable=False, default='calendar')
+
     # --- Compliance Calculation Basis ---
     # 'basic_da'  = EPF/ESIC calculated on Basic + DA only (most common)
     # 'gross'     = EPF/ESIC calculated on Gross salary

@@ -60,6 +60,11 @@ def payroll_config(est_id):
         else:
             config.custom_working_days = None
 
+        # Monthly "Full Salary" (LOP) mode
+        config.monthly_full_salary = ('monthly_full_salary' in request.form)
+        _lopd = request.form.get('lop_divisor', 'calendar')
+        config.lop_divisor = _lopd if _lopd in ('calendar', '26', '30') else 'calendar'
+
         # Billing cycle start day (1 = standard, >1 = custom cycle)
         try:
             _cycle_day = int(request.form.get('billing_cycle_start_day', 1))
@@ -1799,6 +1804,23 @@ def save_attendance(payroll_id):
         'esic_ee': 0, 'esic_er': 0, 'pt': 0, 'net': 0
     }
 
+    # ── Monthly "Full Salary" (LOP) mode — establishment-level ──
+    # When ON, a monthly employee present on ALL working days is paid the full
+    # gross; each absent day deducts one day at (gross ÷ _lop_div). Implemented
+    # by re-expressing the existing prorate as: divisor = _lop_div, payable =
+    # _lop_div − absent. Default OFF → nothing changes for existing setups.
+    _full_salary_mode = getattr(config, 'monthly_full_salary', False)
+    _lop_basis = getattr(config, 'lop_divisor', 'calendar') or 'calendar'
+    if _lop_basis == 'calendar':
+        _lop_div = num_days_in_month
+    else:
+        try:
+            _lop_div = int(_lop_basis)
+        except (ValueError, TypeError):
+            _lop_div = num_days_in_month
+    if _lop_div <= 0:
+        _lop_div = num_days_in_month
+
     for entry in entries:
         emp_id = entry.employee_id
         emp = entry.employee  # Employee object for exempt checks
@@ -1822,6 +1844,11 @@ def save_attendance(payroll_id):
         after_rest = remaining - rest_day_count
         after_holidays = after_rest - holiday_count
         entry.days_absent = max(0, after_holidays)
+
+        # Divisor used by the monthly salary/head proration below. Defaults to
+        # the establishment's working_days; overridden to the LOP divisor for
+        # monthly employees when "Full Salary" mode is on (see below).
+        _pay_divisor = working_days
 
         # --- Fetch salary record & rate overrides ---
         salary = EmployeeSalary.query.filter_by(
@@ -1905,8 +1932,12 @@ def save_attendance(payroll_id):
                 full_gross = round(_per_day_total * working_days) if working_days > 0 else entry.earned_gross
             elif _ovr_gross:
                 full_gross = _ovr_gross
-                if working_days > 0:
-                    entry.earned_gross = round((_ovr_gross / working_days) * entry.total_payable_days)
+                if _full_salary_mode:
+                    # Full salary; deduct only absent days at gross ÷ _lop_div.
+                    _pay_divisor = _lop_div
+                    entry.total_payable_days = max(0, _lop_div - entry.days_absent)
+                if _pay_divisor > 0:
+                    entry.earned_gross = round((_ovr_gross / _pay_divisor) * entry.total_payable_days)
                 else:
                     entry.earned_gross = round(_ovr_gross)
             else:
@@ -1937,8 +1968,8 @@ def save_attendance(payroll_id):
                     if sh and sh.head_type == 'earning' and sh.is_in_gross:
                         if _ovr_daily:
                             earned_amt = round(amt * entry.total_payable_days)
-                        elif working_days > 0:
-                            earned_amt = round((amt / working_days) * entry.total_payable_days)
+                        elif _pay_divisor > 0:
+                            earned_amt = round((amt / _pay_divisor) * entry.total_payable_days)
                         else:
                             earned_amt = round(amt)
                         peh = PayrollEntryHead(
@@ -2097,7 +2128,13 @@ def save_attendance(payroll_id):
             if is_daily_wages and _eff_daily_rate:
                 entry.earned_gross = round(_eff_daily_rate * entry.total_payable_days)
             elif emp_absence_deduction and working_days > 0:
-                entry.earned_gross = round((full_gross / working_days) * entry.total_payable_days)
+                if _full_salary_mode and not is_daily_wages:
+                    # Full monthly salary; deduct only absent days at
+                    # gross ÷ _lop_div. Re-expressed as prorate so the head
+                    # breakdown below stays consistent.
+                    _pay_divisor = _lop_div
+                    entry.total_payable_days = max(0, _lop_div - entry.days_absent)
+                entry.earned_gross = round((full_gross / _pay_divisor) * entry.total_payable_days)
             else:
                 entry.earned_gross = round(full_gross)
             entry.gross_salary = full_gross
@@ -2124,7 +2161,7 @@ def save_attendance(payroll_id):
                         elif not emp_absence_deduction:
                             earned_amt = round(amt)
                         else:
-                            earned_amt = round((amt / working_days) * entry.total_payable_days)
+                            earned_amt = round((amt / _pay_divisor) * entry.total_payable_days)
                         peh = PayrollEntryHead(
                             payroll_entry_id=entry.id,
                             salary_head_id=hv_dict['salary_head_id'],
@@ -2330,7 +2367,7 @@ def save_attendance(payroll_id):
                         if is_daily_wages and _eff_daily_rate:
                             esic_excluded += round(hv_dict['amount'] * entry.total_payable_days)
                         else:
-                            esic_excluded += round((hv_dict['amount'] / working_days) * entry.total_payable_days)
+                            esic_excluded += round((hv_dict['amount'] / _pay_divisor) * entry.total_payable_days)
 
             esic_gross = entry.earned_gross - esic_excluded
 
