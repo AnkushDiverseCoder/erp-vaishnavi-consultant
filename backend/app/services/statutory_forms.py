@@ -133,7 +133,7 @@ def xv_rows(payroll, est, config, entries, rows, opts):
     out = []
     tot = {k: 0.0 for k in ('days', 'ot', 'e_basic', 'e_da', 'e_allow', 'e_ot',
                             'e_total', 'epf', 'esic', 'it', 'ins', 'others', 'ded', 'net')}
-    for row in rows:
+    for i, row in enumerate(rows, 1):
         e = ent_by_id.get(row.get('_entry_id'))
         rb, rda, roth = ratemap.get(row.get('_entry_id'), (0, 0, 0))
         if not rb and not rda and not roth:
@@ -144,7 +144,8 @@ def xv_rows(payroll, est, config, entries, rows, opts):
         epf = row['pf']; esic = row['esic']; it = row['income_tax']; ins = row['insurance']
         ded = row['total_ded']
         others = max(0, round(ded - epf - esic - it - ins))
-        d = dict(sl=row['sl'], code=row['emp_code'], name=row['name'],
+        # Wage register must show UAN; fall back to code only when no UAN exists.
+        d = dict(sl=i, code=(row.get('uan') or row['emp_code']), name=row['name'],
                  desig=(e.employee.designation if e else '') or '',
                  dept=(e.employee.department if e else '') or '',
                  duration='Monthly', wperiod=f"{wpf} to {wpt}",
@@ -191,36 +192,58 @@ def xvi_slips(payroll, est, config, entries, rows, opts):
 
 
 def attendance_rows(payroll, est, config, entries, rows, opts):
-    """Per-employee attendance with a day-by-day list for FORM-XIV."""
+    """Per-employee attendance with a day-by-day list for FORM-XIV.
+
+    Absent days are distributed RANDOMLY among the working days (like Form D),
+    not clustered at month-end. The randomisation is SEEDED per employee+month
+    so the pattern is stable — the Excel and the Print/PDF view show the same
+    muster, and re-opening the report reproduces it."""
+    import random
     ndays, _, _ = _period(payroll)
     s_in = opts.get('shift_in') or '09:00'
     s_out = opts.get('shift_out') or '18:00'
     ent_by_id = {e.id: e for e in entries}
-    rday = 6
-    if getattr(config, 'rest_day_type', 'sunday') == 'fixed_day' and getattr(config, 'rest_day_weekday', None) is not None:
-        rday = config.rest_day_weekday
-    sundays = {d for d in range(1, ndays + 1) if calendar.weekday(payroll.year, payroll.month, d) == rday}
+
+    # Rest days (weekly off) — mirrors the existing Form-D logic
+    rtype = getattr(config, 'rest_day_type', 'sunday')
+    if rtype == 'rotation':
+        rest = set(range(7, ndays + 1, 7))
+    else:
+        rday = config.rest_day_weekday if (rtype == 'fixed_day' and getattr(config, 'rest_day_weekday', None) is not None) else 6
+        rest = {d for d in range(1, ndays + 1) if calendar.weekday(payroll.year, payroll.month, d) == rday}
     holidays = set()
     if getattr(payroll, 'holiday_dates', None):
         for d in payroll.holiday_dates.split(','):
             if d.strip().isdigit():
                 holidays.add(int(d.strip()))
+
     out = []
     for i, row in enumerate(rows, 1):
         e = ent_by_id.get(row.get('_entry_id'))
         emp = e.employee if e else None
-        present = int(round(row['days_worked'])); worked = 0
+        present = int(round(row['days_worked']))
+        available = [d for d in range(1, ndays + 1) if d not in rest and d not in holidays]
+        absent = max(0, len(available) - present)
+        assignments = ['P'] * max(0, present) + ['A'] * absent
+        while len(assignments) < len(available):
+            assignments.append('P')
+        assignments = assignments[:len(available)]
+        rnd = random.Random(f"{payroll.year}-{payroll.month}-{row.get('_entry_id')}")
+        rnd.shuffle(assignments)
+        markmap = {d: assignments[idx] for idx, d in enumerate(available)}
+
         days = []
         for d in range(1, ndays + 1):
-            if d in sundays:
+            if d in rest:
                 days.append(('W', 'O', 'wo'))
             elif d in holidays:
                 days.append(('H', 'H', 'hol'))
-            elif worked < present:
-                days.append((s_in, s_out, 'p')); worked += 1
-            else:
+            elif markmap.get(d) == 'A':
                 days.append(('A', '', 'ab'))
-        out.append(dict(sl=i, code=row['emp_code'], name=emp.name if emp else row['name'],
+            else:
+                days.append((s_in, s_out, 'p'))
+        out.append(dict(sl=i, code=(row.get('uan') or row['emp_code']),
+                        name=emp.name if emp else row['name'],
                         desig=(emp.designation if emp else '') or '',
                         dept=(emp.department if emp else '') or '',
                         days=days, total_days=present, ot=round(row['ot_days'])))
@@ -242,7 +265,7 @@ def build_form_xv(payroll, est, config, entries, rows, opts):
     _merge(ws, 4, 1, 4, LAST, _est_line(est, with_pan=True) + f"    |    Wage Period From {wpf}  To  {wpt}", INFO, Lf, border=False)
     ws.row_dimensions[4].height = 34
 
-    single = {1: "Sl. No", 2: "Employee Code Number", 3: "Name of the Employee",
+    single = {1: "Sl. No", 2: "UAN Number", 3: "Name of the Employee",
               4: "Designation", 5: "Department",
               6: "Duration of Payment of Wages (Monthly/Fortnightly/Weekly/Piece-rated)",
               7: "Wage Period From  -  To",
@@ -389,7 +412,7 @@ def build_form_xiv(payroll, est, config, entries, rows, opts):
     _merge(ws, 4, 1, 4, LAST, _est_line(est) + f"    |    For the Month of: {calendar.month_name[payroll.month]} {payroll.year}", INFO, Lf, border=False)
     ws.row_dimensions[4].height = 30
 
-    infoh = {1: "S. No", 2: "Employee Code", 3: "Name of the Employee", 4: "Designation",
+    infoh = {1: "S. No", 2: "UAN Number", 3: "Name of the Employee", 4: "Designation",
              5: "Shift", 6: "Place of Work / Section / Dept."}
     for c, t in infoh.items():
         _merge(ws, 6, c, 8, c, t, HDR, C, HDR_FILL)
