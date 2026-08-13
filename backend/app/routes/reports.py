@@ -342,13 +342,58 @@ def form_b_excel(payroll_id):
 _XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 
 
+def _form_opts(payroll, config):
+    """Wage-period / payment-date / shift-times for the revised forms.
+    Defaults from the establishment's billing cycle + config, overridable per
+    request via ?wp_from ?wp_to ?pay_date ?shift_in ?shift_out (date inputs
+    send YYYY-MM-DD)."""
+    import datetime as _d
+    ndays = calendar.monthrange(payroll.year, payroll.month)[1]
+    cycle = getattr(config, 'billing_cycle_start_day', 1) or 1
+    if cycle > 1:
+        pm = payroll.month - 1 or 12
+        py = payroll.year if payroll.month > 1 else payroll.year - 1
+        wp_from = _d.date(py, pm, min(cycle, calendar.monthrange(py, pm)[1]))
+        wp_to = _d.date(payroll.year, payroll.month, min(cycle - 1, ndays))
+    else:
+        wp_from = _d.date(payroll.year, payroll.month, 1)
+        wp_to = _d.date(payroll.year, payroll.month, ndays)
+    pd = getattr(config, 'wage_payment_day', None)
+    if pd:
+        nm = wp_to.month + 1 if wp_to.month < 12 else 1
+        nyr = wp_to.year if wp_to.month < 12 else wp_to.year + 1
+        pay = _d.date(nyr, nm, min(int(pd), calendar.monthrange(nyr, nm)[1]))
+    else:
+        pay = wp_to
+
+    def _ov(name, default):
+        v = request.args.get(name, '')
+        if v:
+            try:
+                return _d.datetime.strptime(v, '%Y-%m-%d').date()
+            except ValueError:
+                pass
+        return default
+    wp_from = _ov('wp_from', wp_from)
+    wp_to = _ov('wp_to', wp_to)
+    pay = _ov('pay_date', pay)
+    shift_in = request.args.get('shift_in') or (getattr(config, 'shift_in_time', None) or '09:00')
+    shift_out = request.args.get('shift_out') or (getattr(config, 'shift_out_time', None) or '18:00')
+    fmt = lambda d: d.strftime('%d-%m-%Y')
+    return {
+        'wp_from': fmt(wp_from), 'wp_to': fmt(wp_to), 'pay_date': fmt(pay),
+        'wp_from_iso': wp_from.isoformat(), 'wp_to_iso': wp_to.isoformat(), 'pay_iso': pay.isoformat(),
+        'shift_in': shift_in, 'shift_out': shift_out,
+    }
+
+
 def _revised_excel(payroll_id, builder, tag):
     from app.services import statutory_forms as _sf
     from app.utils.naming import short_est_code
     payroll, est, config, entries, heads = _get_payroll_data(payroll_id)
     head_map = _map_heads_to_form_b(heads)
     rows = _build_form_b_rows(entries, heads, head_map, config, payroll)
-    out = builder(payroll, est, config, entries, rows)
+    out = builder(payroll, est, config, entries, rows, _form_opts(payroll, config))
     fname = f"{tag}_{short_est_code(est.company_name)}_{calendar.month_abbr[payroll.month]}{payroll.year}.xlsx"
     return send_file(out, mimetype=_XLSX_MIME, as_attachment=True, download_name=fname)
 
@@ -365,9 +410,10 @@ def form_xv_view(payroll_id):
     payroll, est, config, entries, heads = _get_payroll_data(payroll_id)
     head_map = _map_heads_to_form_b(heads)
     rows = _build_form_b_rows(entries, heads, head_map, config, payroll)
-    xrows, totals, wpf, wpt = _sf.xv_rows(payroll, est, config, entries, rows)
+    opts = _form_opts(payroll, config)
+    xrows, totals = _sf.xv_rows(payroll, est, config, entries, rows, opts)
     return render_template('reports/form_xv.html', payroll=payroll, est=est, config=config,
-                           rows=xrows, totals=totals, wpf=wpf, wpt=wpt)
+                           rows=xrows, totals=totals, opts=opts)
 
 
 @reports_bp.route('/payroll/<int:payroll_id>/report/form-xvi/excel')
@@ -382,9 +428,10 @@ def form_xvi_view(payroll_id):
     payroll, est, config, entries, heads = _get_payroll_data(payroll_id)
     head_map = _map_heads_to_form_b(heads)
     rows = _build_form_b_rows(entries, heads, head_map, config, payroll)
-    slips, wpf, wpt = _sf.xvi_slips(payroll, est, config, entries, rows)
+    opts = _form_opts(payroll, config)
+    slips = _sf.xvi_slips(payroll, est, config, entries, rows, opts)
     return render_template('reports/form_xvi.html', payroll=payroll, est=est, config=config,
-                           slips=slips, wpf=wpf, wpt=wpt)
+                           slips=slips, opts=opts)
 
 
 @reports_bp.route('/payroll/<int:payroll_id>/report/form-xiv/excel')
@@ -399,9 +446,10 @@ def form_xiv_view(payroll_id):
     payroll, est, config, entries, heads = _get_payroll_data(payroll_id)
     head_map = _map_heads_to_form_b(heads)
     rows = _build_form_b_rows(entries, heads, head_map, config, payroll)
-    arows, ndays = _sf.attendance_rows(payroll, est, config, entries, rows)
+    opts = _form_opts(payroll, config)
+    arows, ndays = _sf.attendance_rows(payroll, est, config, entries, rows, opts)
     return render_template('reports/form_xiv.html', payroll=payroll, est=est, config=config,
-                           rows=arows, ndays=ndays, day_range=list(range(1, ndays + 1)))
+                           rows=arows, ndays=ndays, day_range=list(range(1, ndays + 1)), opts=opts)
 
 
 # =============================================

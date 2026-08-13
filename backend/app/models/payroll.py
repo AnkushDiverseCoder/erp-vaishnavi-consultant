@@ -75,6 +75,14 @@ class PayrollConfig(db.Model):
     # e.g. 26 means cycle runs 26th March → 25th April for "April" payroll
     billing_cycle_start_day = db.Column(db.Integer, nullable=True, default=1)
 
+    # --- Statutory-form defaults (revised FORM-XIV/XV/XVI) ---
+    # Standard shift IN/OUT times printed on the attendance register (per estt.).
+    shift_in_time  = db.Column(db.String(5), nullable=True, default='09:00')
+    shift_out_time = db.Column(db.String(5), nullable=True, default='18:00')
+    # Default salary-payment day (1-28). Applied to the month AFTER the wage
+    # period ends (e.g. 7 → 7th of next month). NULL = use wage-period end date.
+    wage_payment_day = db.Column(db.Integer, nullable=True)
+
     # --- Rest Day / Weekly Off Settings ---
     # 'sunday'    = Fixed Sunday rest (default)
     # 'rotation'  = Rotation rest after 6 working days

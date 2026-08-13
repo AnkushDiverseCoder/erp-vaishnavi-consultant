@@ -30,15 +30,22 @@
 <div class="bar no-print">
   <div><strong>FORM-XVI — Wage Slip (Revised)</strong> — {{ est.company_name }} — {{ payroll.period_display }} — {{ slips|length }} slip(s)</div>
   <div><button onclick="window.print()">🖨 Print / Save PDF</button>
-       <a href="{{ url_for('reports.form_xvi_excel', payroll_id=payroll.id) }}" style="color:#fff; margin-left:10px; font-size:12px;">⬇ Excel</a></div>
+       <a id="xlsx" href="{{ url_for('reports.form_xvi_excel', payroll_id=payroll.id) }}" style="color:#fff; margin-left:10px; font-size:12px;">⬇ Excel</a></div>
 </div>
+<form method="get" class="optbar no-print" onsubmit="syncXlsx()" style="background:#eef3f9; padding:6px 12px; font-size:12px; display:flex; gap:10px; align-items:center; flex-wrap:wrap; border-bottom:1px solid #cdd8e6;">
+  <b>Wage Period:</b>
+  <label>From <input type="date" name="wp_from" value="{{ opts.wp_from_iso }}"></label>
+  <label>To <input type="date" name="wp_to" value="{{ opts.wp_to_iso }}"></label>
+  <label><b>Payment / Issue Date</b> <input type="date" name="pay_date" value="{{ opts.pay_iso }}"></label>
+  <button type="submit" style="background:#1f4e79; color:#fff; border:none; padding:4px 12px; border-radius:4px;">Apply</button>
+</form>
 <div class="wrap">
   {% for s in slips %}
   <div class="slip">
     <div class="st1">FORM-V (See Rule 52) &nbsp;/&nbsp; FORM-XVI [See Rule 72(2)]</div>
     <div class="st2">WAGE SLIP</div>
     <table>
-      <tr class="kv"><td class="lbl">Date of Issue</td><td>{{ wpt }}</td></tr>
+      <tr class="kv"><td class="lbl">Date of Issue</td><td>{{ opts.pay_date }}</td></tr>
       <tr class="kv"><td class="lbl">Name of the Establishment</td><td>{{ est.company_name }}</td></tr>
       <tr class="kv"><td class="lbl">Address</td><td>{{ est.address or '' }}</td></tr>
       <tr class="kv"><td class="lbl">Period</td><td>{{ payroll.period_display }}</td></tr>
@@ -68,5 +75,14 @@
   </div>
   {% endfor %}
 </div>
+<script>
+  function syncXlsx(){
+    var qs = window.location.search;
+    var el = document.getElementById('xlsx');
+    var base = el.getAttribute('href').split('?')[0];
+    el.setAttribute('href', base + qs);
+  }
+  syncXlsx();
+</script>
 </body>
 </html>

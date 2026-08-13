@@ -125,9 +125,9 @@ def _rate_map(entries):
 
 
 # ── shared normalizers (used by BOTH the Excel builders and the print views) ──
-def xv_rows(payroll, est, config, entries, rows):
+def xv_rows(payroll, est, config, entries, rows, opts):
     """Normalized wage-register rows for FORM-XV (Excel + HTML share these)."""
-    _, wpf, wpt = _period(payroll)
+    wpf, wpt, paydate = opts['wp_from'], opts['wp_to'], opts['pay_date']
     ent_by_id = {e.id: e for e in entries}
     ratemap = _rate_map(entries)
     out = []
@@ -154,7 +154,7 @@ def xv_rows(payroll, est, config, entries, rows):
                  e_ot=round(e_ot), e_total=round(e_total),
                  epf=round(epf), esic=round(esic), it=round(it), ins=round(ins),
                  others=others, ded=round(ded), net=round(row['net_pay']),
-                 date_pay=wpt)
+                 date_pay=paydate)
         out.append(d)
         for k, v in (('days', row['days_worked']), ('ot', row['ot_days']),
                      ('e_basic', e_basic), ('e_da', e_da), ('e_allow', e_allow),
@@ -162,12 +162,12 @@ def xv_rows(payroll, est, config, entries, rows):
                      ('it', it), ('ins', ins), ('others', others), ('ded', ded), ('net', row['net_pay'])):
             tot[k] += v
     totals = {k: round(v) for k, v in tot.items()}
-    return out, totals, wpf, wpt
+    return out, totals
 
 
-def xvi_slips(payroll, est, config, entries, rows):
+def xvi_slips(payroll, est, config, entries, rows, opts):
     """Per-employee wage-slip dicts for FORM-XVI."""
-    _, wpf, wpt = _period(payroll)
+    wpf, wpt = opts['wp_from'], opts['wp_to']
     ent_by_id = {e.id: e for e in entries}
     ratemap = _rate_map(entries)
     slips = []
@@ -187,12 +187,14 @@ def xvi_slips(payroll, est, config, entries, rows):
             days=row['days_worked'], ot=round(row['ot_amount']),
             gross=te, total_ded=td, epf=epf, esic=esic,
             others=max(0, td - epf - esic), net=net))
-    return slips, wpf, wpt
+    return slips
 
 
-def attendance_rows(payroll, est, config, entries, rows):
+def attendance_rows(payroll, est, config, entries, rows, opts):
     """Per-employee attendance with a day-by-day list for FORM-XIV."""
     ndays, _, _ = _period(payroll)
+    s_in = opts.get('shift_in') or '09:00'
+    s_out = opts.get('shift_out') or '18:00'
     ent_by_id = {e.id: e for e in entries}
     rday = 6
     if getattr(config, 'rest_day_type', 'sunday') == 'fixed_day' and getattr(config, 'rest_day_weekday', None) is not None:
@@ -215,7 +217,7 @@ def attendance_rows(payroll, est, config, entries, rows):
             elif d in holidays:
                 days.append(('H', 'H', 'hol'))
             elif worked < present:
-                days.append(('09:00', '18:00', 'p')); worked += 1
+                days.append((s_in, s_out, 'p')); worked += 1
             else:
                 days.append(('A', '', 'ab'))
         out.append(dict(sl=i, code=row['emp_code'], name=emp.name if emp else row['name'],
@@ -228,12 +230,11 @@ def attendance_rows(payroll, est, config, entries, rows):
 # ════════════════════════════════════════════════════════════════════
 # FORM-XV — Register of Wages, OT, Advances, Fines and Deductions
 # ════════════════════════════════════════════════════════════════════
-def build_form_xv(payroll, est, config, entries, rows):
+def build_form_xv(payroll, est, config, entries, rows, opts):
     wb = Workbook(); ws = wb.active; ws.title = "FORM-XV"
     LAST = 34
-    ndays, wpf, wpt = _period(payroll)
-    ratemap = _rate_map(entries)
-    ent_by_id = {e.id: e for e in entries}
+    wpf, wpt = opts['wp_from'], opts['wp_to']
+    xrows, totals = xv_rows(payroll, est, config, entries, rows, opts)
 
     _merge(ws, 1, 1, 1, LAST, "FORM-IV / FORM-XV", TITLE, C, border=False)
     _merge(ws, 2, 1, 2, LAST, "[See clause (ii) of Sub Rule (1) of Rule 51]", SUB, C, border=False)
@@ -275,39 +276,19 @@ def build_form_xv(payroll, est, config, entries, rows):
         cell.font = Font(name=F, size=7, italic=True); cell.alignment = C; cell.border = BORDER
 
     r = 9
-    tot = {k: 0.0 for k in ('days', 'ot', 'e_basic', 'e_da', 'e_allow', 'e_ot',
-                            'e_total', 'epf', 'esic', 'it', 'ins', 'others', 'ded', 'net')}
-    for row in rows:
-        e = ent_by_id.get(row.get('_entry_id'))
-        rb, rda, roth = ratemap.get(row.get('_entry_id'), (0, 0, 0))
-        if not rb and not rda and not roth:
-            rb = row.get('rate') or 0
-        e_basic = row['basic']; e_da = row['da']
-        e_allow = row['spl_basic'] + row['hra'] + row['others'] + row['nph']
-        e_ot = row['ot_amount']; e_total = row['gross']
-        epf = row['pf']; esic = row['esic']; it = row['income_tax']; ins = row['insurance']
-        total_ded = row['total_ded']
-        others = max(0, round(total_ded - epf - esic - it - ins))  # incl. PT etc.
-        net = row['net_pay']
-        vals = [row['sl'], row['emp_code'], row['name'],
-                (e.employee.designation if e else '') or '',
-                (e.employee.department if e else '') or '',
-                "Monthly", f"{wpf} to {wpt}", row['days_worked'], row['ot_days'],
-                round(rb), round(rda), round(roth),
-                round(e_basic), round(e_da), round(e_allow), round(e_ot), round(e_total),
-                round(epf), round(esic), 0, round(it), round(ins), 0, 0, 0,
-                round(total_ded), others, round(net),
-                wpt, "Bank Transfer", "", 0, "", ""]
+    for d in xrows:
+        vals = [d['sl'], d['code'], d['name'], d['desig'], d['dept'],
+                d['duration'], d['wperiod'], d['days'], d['ot'],
+                d['rb'], d['rda'], d['roth'],
+                d['e_basic'], d['e_da'], d['e_allow'], d['e_ot'], d['e_total'],
+                d['epf'], d['esic'], 0, d['it'], d['ins'], 0, 0, 0,
+                d['ded'], d['others'], d['net'],
+                d['date_pay'], "Bank Transfer", "", 0, "", ""]
         for c, v in enumerate(vals, 1):
             cell = ws.cell(row=r, column=c, value=v)
             cell.font = BODY; cell.border = BORDER
             cell.alignment = Lf if c in (3, 4, 5, 6, 7, 30, 31) else (Rt if c >= 10 else C)
         ws.row_dimensions[r].height = 24
-        for k, v in (('days', row['days_worked']), ('ot', row['ot_days']),
-                     ('e_basic', e_basic), ('e_da', e_da), ('e_allow', e_allow),
-                     ('e_ot', e_ot), ('e_total', e_total), ('epf', epf), ('esic', esic),
-                     ('it', it), ('ins', ins), ('others', others), ('ded', total_ded), ('net', net)):
-            tot[k] += v
         r += 1
 
     # TOTAL row
@@ -315,7 +296,7 @@ def build_form_xv(payroll, est, config, entries, rows):
     totmap = {13: 'e_basic', 14: 'e_da', 15: 'e_allow', 16: 'e_ot', 17: 'e_total',
               18: 'epf', 19: 'esic', 21: 'it', 22: 'ins', 26: 'ded', 27: 'others', 28: 'net'}
     for c in range(10, LAST + 1):
-        cell = ws.cell(row=r, column=c, value=(round(tot[totmap[c]]) if c in totmap else ''))
+        cell = ws.cell(row=r, column=c, value=(totals[totmap[c]] if c in totmap else ''))
         cell.font = BOLD; cell.alignment = Rt; cell.border = BORDER
     ws.row_dimensions[r].height = 22
     r += 1
@@ -336,41 +317,35 @@ def build_form_xv(payroll, est, config, entries, rows):
 # ════════════════════════════════════════════════════════════════════
 # FORM-XVI — Wage Slip (one per employee, A4 portrait, 2 per page)
 # ════════════════════════════════════════════════════════════════════
-def build_form_xvi(payroll, est, config, entries, rows):
+def build_form_xvi(payroll, est, config, entries, rows, opts):
     wb = Workbook(); ws = wb.active; ws.title = "FORM-XVI"
     LAST = 6
-    ndays, wpf, wpt = _period(payroll)
-    ent_by_id = {e.id: e for e in entries}
-    ratemap = _rate_map(entries)
+    slips = xvi_slips(payroll, est, config, entries, rows, opts)
 
     row = 1
-    n = len(rows)
-    for idx, rw in enumerate(rows):
-        e = ent_by_id.get(rw.get('_entry_id'))
-        emp = e.employee if e else None
-        rb, rda, roth = ratemap.get(rw.get('_entry_id'), (0, 0, 0))
-        total_earn = round(rw['gross']); total_ded = round(rw['total_ded']); net = round(rw['net_pay'])
-        epf = round(rw['pf']); esic = round(rw['esic'])
-        others_ded = max(0, total_ded - epf - esic)
+    n = len(slips)
+    for idx, s in enumerate(slips):
+        total_earn = s['gross']; total_ded = s['total_ded']; net = s['net']
+        epf = s['epf']; esic = s['esic']; others_ded = s['others']
         b = row
         _merge(ws, b, 1, b, LAST, "FORM-V (See Rule 52)  /  FORM-XVI [See Rule 72(2)]", Font(name=F, size=11, bold=True), C, border=False)
         _merge(ws, b + 1, 1, b + 1, LAST, "WAGE SLIP", Font(name=F, size=12, bold=True), C, border=False)
-        _merge(ws, b + 2, 1, b + 2, 3, "Date of Issue", BOLD, Lf); _merge(ws, b + 2, 4, b + 2, 6, wpt, BODY, Lf)
+        _merge(ws, b + 2, 1, b + 2, 3, "Date of Issue", BOLD, Lf); _merge(ws, b + 2, 4, b + 2, 6, opts['pay_date'], BODY, Lf)
         _merge(ws, b + 3, 1, b + 3, 3, "Name of the Establishment", BOLD, Lf); _merge(ws, b + 3, 4, b + 3, 6, est.company_name, BODY, Lf)
         _merge(ws, b + 4, 1, b + 4, 3, "Address", BOLD, Lf); _merge(ws, b + 4, 4, b + 4, 6, est.address or '', BODY, Lf)
         ws.row_dimensions[b + 4].height = 26
         _merge(ws, b + 5, 1, b + 5, 3, "Period", BOLD, Lf); _merge(ws, b + 5, 4, b + 5, 6, f"{calendar.month_name[payroll.month]} {payroll.year}", BODY, Lf)
         _merge(ws, b + 6, 1, b + 6, 1, "S.No", HDR, C, HDR_FILL); _merge(ws, b + 6, 2, b + 6, 3, "Details", HDR, C, HDR_FILL); _merge(ws, b + 6, 4, b + 6, 6, "Particulars", HDR, C, HDR_FILL)
         slip = [
-            ("1", "Name of the Employee", emp.name if emp else rw['name']),
-            ("2", "Father's / Mother's / Spouse Name", (emp.father_husband_name if emp else '') or ''),
-            ("3", "Designation", (emp.designation if emp else '') or ''),
-            ("4", "UAN", (emp.uan_number if emp else '') or ''),
-            ("5", "Bank Account Number", (emp.bank_account_number if emp else '') or ''),
-            ("6", "Wage Period", f"{wpf} to {wpt}"),
-            ("7", "Rate of Wages Payable", f"(a) Basic {round(rb):,}   (b) DA {round(rda):,}   (c) Other Allow. {round(roth):,}"),
-            ("8", "Total Attendance / Unit of Work Done", f"{rw['days_worked']} days"),
-            ("9", "Overtime Wages", f"{round(rw['ot_amount']):,}"),
+            ("1", "Name of the Employee", s['name']),
+            ("2", "Father's / Mother's / Spouse Name", s['father']),
+            ("3", "Designation", s['desig']),
+            ("4", "UAN", s['uan']),
+            ("5", "Bank Account Number", s['bank']),
+            ("6", "Wage Period", s['wperiod']),
+            ("7", "Rate of Wages Payable", f"(a) Basic {s['rb']:,}   (b) DA {s['rda']:,}   (c) Other Allow. {s['roth']:,}"),
+            ("8", "Total Attendance / Unit of Work Done", f"{s['days']} days"),
+            ("9", "Overtime Wages", f"{s['ot']:,}"),
             ("10", "Gross Wages Payable", f"{total_earn:,}"),
             ("11", "Total Deductions", f"{total_ded:,}   [(a) EPF {epf:,}  (b) ESI {esic:,}  (c) Others {others_ded:,}]"),
             ("12", "Net Wages Paid", f"{net:,}"),
@@ -401,26 +376,12 @@ def build_form_xvi(payroll, est, config, entries, rows):
 # ════════════════════════════════════════════════════════════════════
 # FORM-XIV — Attendance Register-cum-Muster Roll (A3 landscape)
 # ════════════════════════════════════════════════════════════════════
-def build_form_xiv(payroll, est, config, entries, rows):
+def build_form_xiv(payroll, est, config, entries, rows, opts):
     wb = Workbook(); ws = wb.active; ws.title = "FORM-XIV"
-    ndays, wpf, wpt = _period(payroll)
+    arows, ndays = attendance_rows(payroll, est, config, entries, rows, opts)
     day_start = 7
     LAST = 6 + ndays * 2 + 4
-    ent_by_id = {e.id: e for e in entries}
-
-    # weekly-off weekday (0=Mon..6=Sun) from config
-    rday = 6
-    rtype = getattr(config, 'rest_day_type', 'sunday')
-    if rtype == 'fixed_day' and getattr(config, 'rest_day_weekday', None) is not None:
-        rday = config.rest_day_weekday
-    sundays = {d for d in range(1, ndays + 1) if calendar.weekday(payroll.year, payroll.month, d) == rday}
-    holidays = set()
-    if getattr(payroll, 'holiday_dates', None):
-        for d in payroll.holiday_dates.split(','):
-            d = d.strip()
-            if d.isdigit():
-                holidays.add(int(d))
-    shift_in, shift_out = "09:00", "18:00"
+    _cls_color = {'p': None, 'wo': 'C00000', 'hol': '2E75B6', 'ab': '808080'}
 
     _merge(ws, 1, 1, 1, LAST, "FORM-IX  /  FORM-XIV", TITLE, C, border=False)
     _merge(ws, 2, 1, 2, LAST, "(See clause (iii) of Sub Rule (1) of 51)  /  (See Rule 72 (1)(ii))", SUB, C, border=False)
@@ -448,34 +409,21 @@ def build_form_xiv(payroll, est, config, entries, rows):
     ws.row_dimensions[6].height = 16; ws.row_dimensions[7].height = 12; ws.row_dimensions[8].height = 24
 
     r = 9
-    for i, rw in enumerate(rows, 1):
-        e = ent_by_id.get(rw.get('_entry_id'))
-        emp = e.employee if e else None
-        vals = [i, rw['emp_code'], emp.name if emp else rw['name'],
-                (emp.designation if emp else '') or '', "General",
-                (emp.department if emp else '') or '']
+    for rw in arows:
+        vals = [rw['sl'], rw['code'], rw['name'], rw['desig'], "General", rw['dept']]
         for c, v in enumerate(vals, 1):
             cell = ws.cell(row=r, column=c, value=v); cell.font = BODY
             cell.alignment = Lf if c in (3, 4, 6) else C
-        worked = 0
-        present = int(round(rw['days_worked']))
-        for d in range(1, ndays + 1):
-            c = day_start + (d - 1) * 2
-            if d in sundays:
-                mk = ('W', 'O', 'C00000')
-            elif d in holidays:
-                mk = ('H', 'H', '2E75B6')
-            elif worked < present:
-                mk = (shift_in, shift_out, None); worked += 1
-            else:
-                mk = ('A', '', '808080')
-            for cc, txt in ((c, mk[0]), (c + 1, mk[1])):
+        for d, (din, dout, cls) in enumerate(rw['days']):
+            c = day_start + d * 2
+            color = _cls_color.get(cls)
+            for cc, txt in ((c, din), (c + 1, dout)):
                 cell = ws.cell(row=r, column=cc, value=txt)
-                cell.font = Font(name=F, size=6, bold=(mk[2] is not None), color=(mk[2] or '000000'))
+                cell.font = Font(name=F, size=6, bold=(color is not None), color=(color or '000000'))
                 cell.alignment = C
-        ws.cell(row=r, column=LAST - 3, value=present).font = BOLD
+        ws.cell(row=r, column=LAST - 3, value=rw['total_days']).font = BOLD
         ws.cell(row=r, column=LAST - 3).alignment = C
-        ws.cell(row=r, column=LAST - 2, value=round(rw['ot_days'])).font = BODY
+        ws.cell(row=r, column=LAST - 2, value=rw['ot']).font = BODY
         ws.cell(row=r, column=LAST - 2).alignment = C
         _box(ws, r, 1, r, LAST)
         ws.row_dimensions[r].height = 15

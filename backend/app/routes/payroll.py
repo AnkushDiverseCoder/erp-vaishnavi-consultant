@@ -72,6 +72,15 @@ def payroll_config(est_id):
         except (ValueError, TypeError):
             config.billing_cycle_start_day = 1
 
+        # Statutory-form defaults (shift times + salary payment day)
+        config.shift_in_time = (request.form.get('shift_in_time', '') or '09:00').strip()[:5]
+        config.shift_out_time = (request.form.get('shift_out_time', '') or '18:00').strip()[:5]
+        _pd = request.form.get('wage_payment_day', '').strip()
+        try:
+            config.wage_payment_day = max(1, min(28, int(_pd))) if _pd else None
+        except (ValueError, TypeError):
+            config.wage_payment_day = None
+
         # Compliance Basis
         config.compliance_basis = request.form.get('compliance_basis', 'basic_da')
         config.include_ot_in_epf = 'include_ot_in_epf' in request.form

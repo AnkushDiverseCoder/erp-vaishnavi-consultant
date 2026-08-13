@@ -846,6 +846,10 @@ def _auto_migrate_columns(db):
         # Monthly full-salary (LOP) mode
         "ALTER TABLE payroll_configs ADD COLUMN IF NOT EXISTS monthly_full_salary BOOLEAN DEFAULT FALSE",
         "ALTER TABLE payroll_configs ADD COLUMN IF NOT EXISTS lop_divisor VARCHAR(10) NOT NULL DEFAULT 'calendar'",
+        # Statutory-form defaults (shift times + payment day)
+        "ALTER TABLE payroll_configs ADD COLUMN IF NOT EXISTS shift_in_time VARCHAR(5) DEFAULT '09:00'",
+        "ALTER TABLE payroll_configs ADD COLUMN IF NOT EXISTS shift_out_time VARCHAR(5) DEFAULT '18:00'",
+        "ALTER TABLE payroll_configs ADD COLUMN IF NOT EXISTS wage_payment_day INTEGER",
     ]:
         try:
             db.session.execute(db.text(ddl))

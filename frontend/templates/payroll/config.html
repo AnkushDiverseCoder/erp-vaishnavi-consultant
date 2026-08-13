@@ -244,6 +244,33 @@
             </div>
         </div>
 
+        <!-- Statutory Form Defaults (revised FORM-XIV / XV / XVI) -->
+        <div class="form-section">
+            <div class="form-section-title"><i class="bi bi-file-earmark-ruled"></i> Statutory Form Defaults (Revised FORM-XIV/XV/XVI)</div>
+            <div class="form-section-desc">Defaults printed on the revised government forms. The <b>Wage Period</b> is taken from the <b>Billing Cycle Start Day</b> above; every value can also be adjusted on the report itself before printing.</div>
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label">Standard Shift — IN time</label>
+                    <input type="time" name="shift_in_time" class="form-control"
+                           value="{{ config.shift_in_time if config and config.shift_in_time else '09:00' }}">
+                    <small class="text-muted">Attendance register IN time</small>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Standard Shift — OUT time</label>
+                    <input type="time" name="shift_out_time" class="form-control"
+                           value="{{ config.shift_out_time if config and config.shift_out_time else '18:00' }}">
+                    <small class="text-muted">Attendance register OUT time</small>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Salary Payment Day <span class="text-muted" style="font-weight:400;">(optional)</span></label>
+                    <input type="number" name="wage_payment_day" class="form-control" min="1" max="28"
+                           value="{{ config.wage_payment_day if config and config.wage_payment_day else '' }}"
+                           placeholder="e.g. 7">
+                    <small class="text-muted">Day of the <b>next</b> month salary is paid (e.g. 7 → 7th). Blank = wage-period end date.</small>
+                </div>
+            </div>
+        </div>
+
         <!-- Rest Day / Weekly Off -->
         <div class="form-section">
             <div class="form-section-title"><i class="bi bi-calendar-x"></i> Rest Day / Weekly Off</div>

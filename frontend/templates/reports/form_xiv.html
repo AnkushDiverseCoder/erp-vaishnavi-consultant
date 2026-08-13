@@ -33,8 +33,15 @@
 <div class="bar no-print">
   <div><strong>FORM-XIV — Attendance Register-cum-Muster Roll (Revised)</strong> — {{ est.company_name }} — {{ payroll.period_display }}</div>
   <div><button onclick="window.print()">🖨 Print / Save PDF (A3)</button>
-       <a href="{{ url_for('reports.form_xiv_excel', payroll_id=payroll.id) }}" style="color:#fff; margin-left:10px; font-size:12px;">⬇ Excel</a></div>
+       <a id="xlsx" href="{{ url_for('reports.form_xiv_excel', payroll_id=payroll.id) }}" style="color:#fff; margin-left:10px; font-size:12px;">⬇ Excel</a></div>
 </div>
+<form method="get" class="optbar no-print" onsubmit="syncXlsx()" style="background:#eef3f9; padding:6px 12px; font-size:12px; display:flex; gap:10px; align-items:center; flex-wrap:wrap; border-bottom:1px solid #cdd8e6;">
+  <b>Shift Timing:</b>
+  <label>IN <input type="time" name="shift_in" value="{{ opts.shift_in }}"></label>
+  <label>OUT <input type="time" name="shift_out" value="{{ opts.shift_out }}"></label>
+  <button type="submit" style="background:#1f4e79; color:#fff; border:none; padding:4px 12px; border-radius:4px;">Apply</button>
+  <span style="color:#64748b;">Default shift comes from Payroll Config; adjust here for a different pattern.</span>
+</form>
 <div class="wrap">
   <div class="t1">FORM-IX / FORM-XIV</div>
   <div class="t2">(See clause (iii) of Sub Rule (1) of 51) / (See Rule 72 (1)(ii))</div>
@@ -77,7 +84,16 @@
       {% endfor %}
     </tbody>
   </table>
-  <div class="note">Legend: <span class="wo">W/O</span> = Weekly Off, <span class="hol">H</span> = Holiday, <span class="ab">A</span> = Absent, 09:00/18:00 = standard IN/OUT time. &nbsp; *Required in case Register is maintained physically.</div>
+  <div class="note">Legend: <span class="wo">W/O</span> = Weekly Off, <span class="hol">H</span> = Holiday, <span class="ab">A</span> = Absent, {{ opts.shift_in }}/{{ opts.shift_out }} = standard IN/OUT time. &nbsp; *Required in case Register is maintained physically.</div>
 </div>
+<script>
+  function syncXlsx(){
+    var qs = window.location.search;
+    var el = document.getElementById('xlsx');
+    var base = el.getAttribute('href').split('?')[0];
+    el.setAttribute('href', base + qs);
+  }
+  syncXlsx();
+</script>
 </body>
 </html>
