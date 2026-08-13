@@ -386,6 +386,37 @@
                     <i class="bi bi-file-earmark-excel"></i>
                 </a>
             </div>
+
+            <!-- ── Revised Government Forms (XIV / XV / XVI) ── -->
+            <div style="flex-basis:100%; height:0;"></div>
+            <span class="badge" style="background:#1f4e79; color:#fff; align-self:center; font-size:0.62rem; padding:5px 8px; border-radius:6px;">
+                <i class="bi bi-stars me-1"></i>REVISED FORMAT
+            </span>
+            <div class="btn-group">
+                <a href="{{ url_for('reports.form_xv_view', payroll_id=payroll.id) }}" class="btn btn-outline-primary btn-sm" target="_blank" title="Print / Save PDF">
+                    <i class="bi bi-file-earmark-ruled me-1"></i> FORM-XV (Wage Register)
+                </a>
+                <a href="{{ url_for('reports.form_xv_excel', payroll_id=payroll.id) }}" class="btn btn-success btn-sm" title="Download Excel">
+                    <i class="bi bi-file-earmark-excel"></i>
+                </a>
+            </div>
+            <div class="btn-group">
+                <a href="{{ url_for('reports.form_xvi_view', payroll_id=payroll.id) }}" class="btn btn-outline-primary btn-sm" target="_blank" title="Print / Save PDF">
+                    <i class="bi bi-receipt me-1"></i> FORM-XVI (Wage Slip)
+                </a>
+                <a href="{{ url_for('reports.form_xvi_excel', payroll_id=payroll.id) }}" class="btn btn-success btn-sm" title="Download Excel">
+                    <i class="bi bi-file-earmark-excel"></i>
+                </a>
+            </div>
+            <div class="btn-group">
+                <a href="{{ url_for('reports.form_xiv_view', payroll_id=payroll.id) }}" class="btn btn-outline-primary btn-sm" target="_blank" title="Print / Save PDF (A3)">
+                    <i class="bi bi-calendar-check me-1"></i> FORM-XIV (Attendance)
+                </a>
+                <a href="{{ url_for('reports.form_xiv_excel', payroll_id=payroll.id) }}" class="btn btn-success btn-sm" title="Download Excel">
+                    <i class="bi bi-file-earmark-excel"></i>
+                </a>
+            </div>
+            <div style="flex-basis:100%; height:0;"></div>
             <!-- Attendance Register -->
             <div class="btn-group">
                 <a href="{{ url_for('reports.attendance_view', payroll_id=payroll.id) }}" class="btn btn-outline-secondary btn-sm">

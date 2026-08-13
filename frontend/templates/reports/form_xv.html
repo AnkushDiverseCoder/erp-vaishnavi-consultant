@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>FORM-XV Wage Register — {{ est.company_name }} — {{ payroll.period_display }}</title>
+<style>
+  @page { size: legal landscape; margin: 8mm; }
+  * { box-sizing: border-box; }
+  body { font-family: Arial, sans-serif; color:#000; margin:0; }
+  .bar { background:#1f4e79; color:#fff; padding:8px 14px; display:flex; justify-content:space-between; align-items:center; }
+  .bar button { background:#fff; color:#1f4e79; border:none; padding:6px 16px; border-radius:4px; font-weight:700; cursor:pointer; }
+  .wrap { padding:6px 10px; }
+  .t1 { text-align:center; font-size:14px; font-weight:800; }
+  .t2 { text-align:center; font-size:8px; font-style:italic; }
+  .t3 { text-align:center; font-size:11px; font-weight:700; margin-top:2px; }
+  .info { font-size:8.5px; margin:6px 2px; line-height:1.5; }
+  table { border-collapse:collapse; width:100%; table-layout:fixed; }
+  th,td { border:0.5px solid #000; padding:1px 2px; font-size:7px; text-align:center; word-wrap:break-word; overflow:hidden; }
+  thead th { background:#1f4e79; color:#fff; }
+  thead .grp { background:#2e75b6; }
+  .numrow td { font-size:6.5px; font-style:italic; }
+  td.l { text-align:left; }
+  td.r { text-align:right; }
+  tr.total td { background:#dbe5f1; font-weight:800; }
+  .note { font-size:8px; font-style:italic; margin-top:6px; }
+  @media print { .no-print { display:none !important; } }
+</style>
+</head>
+<body>
+<div class="bar no-print">
+  <div><strong>FORM-XV — Register of Wages, OT & Deductions (Revised)</strong> — {{ est.company_name }} — {{ payroll.period_display }}</div>
+  <div><button onclick="window.print()">🖨 Print / Save PDF</button>
+       <a href="{{ url_for('reports.form_xv_excel', payroll_id=payroll.id) }}" style="color:#fff; margin-left:10px; font-size:12px;">⬇ Excel</a></div>
+</div>
+<div class="wrap">
+  <div class="t1">FORM-IV / FORM-XV</div>
+  <div class="t2">[See clause (ii) of Sub Rule (1) of Rule 51]</div>
+  <div class="t3">REGISTER OF WAGES, OVERTIME, ADVANCES, FINES AND DEDUCTIONS FOR DAMAGE AND LOSS</div>
+  <div class="info">
+    <b>Name of the Establishment:</b> {{ est.company_name }}{% if est.branch_name %} ({{ est.branch_name }}){% endif %} &nbsp;|&nbsp;
+    <b>Name of the Employer:</b> {{ est.contact_person or est.company_name }} &nbsp;|&nbsp;
+    <b>Name of the Owner:</b> {{ est.contact_person or est.company_name }} &nbsp;|&nbsp;
+    <b>PAN/TAN:</b> {{ est.pan_number or '—' }} &nbsp;|&nbsp;
+    <b>Reg. No / LIN:</b> {{ est.pf_code or est.esic_code or '—' }} &nbsp;|&nbsp;
+    <b>Wage Period From</b> {{ wpf }} <b>To</b> {{ wpt }}
+  </div>
+  <table>
+    <colgroup>
+      <col style="width:2.4%"><col style="width:4%"><col style="width:8%"><col style="width:4.5%"><col style="width:4.5%">
+      <col style="width:5%"><col style="width:5.5%"><col style="width:3%"><col style="width:3.2%">
+      <col span="3" style="width:3%"><col span="5" style="width:3.4%"><col span="10" style="width:2.7%">
+      <col style="width:3.6%"><col style="width:3.6%"><col style="width:4%"><col style="width:4%"><col style="width:3%"><col style="width:3%"><col style="width:3.4%">
+    </colgroup>
+    <thead>
+      <tr>
+        <th rowspan="2">Sl.<br>No</th><th rowspan="2">Employee Code</th><th rowspan="2">Name of the Employee</th>
+        <th rowspan="2">Designation</th><th rowspan="2">Department</th>
+        <th rowspan="2">Duration of Payment of Wages</th><th rowspan="2">Wage Period From-To</th>
+        <th rowspan="2">Total Days Worked</th><th rowspan="2">Total OT Hours</th>
+        <th class="grp" colspan="3">Rate of Wage</th>
+        <th class="grp" colspan="5">Amount of Wages Earned</th>
+        <th class="grp" colspan="10">Deductions</th>
+        <th rowspan="2">Net Payment</th><th rowspan="2">Date of Payment</th>
+        <th rowspan="2">Receipt / Bank Txn ID</th>
+        <th rowspan="2">Nature of acts/omissions for fine (with date)</th>
+        <th rowspan="2">Amount of Fine</th><th rowspan="2">Damage/loss by neglect/default</th>
+        <th rowspan="2">Signature of Employer / Rep.</th>
+      </tr>
+      <tr>
+        <th>(a) Basic</th><th>(b) DA</th><th>(c) Other Allow.</th>
+        <th>Basic</th><th>DA</th><th>Allowances</th><th>Over Time</th><th>Total Wages Earned</th>
+        <th>EPF</th><th>ESIC</th><th>Society</th><th>Income Tax</th><th>Insurance</th><th>Advances</th>
+        <th>Recovery of Fine</th><th>Recovery of damages</th><th>Total Deductions</th><th>Others</th>
+      </tr>
+      <tr class="numrow">
+        {% for n in range(1, 35) %}<td>{{ n }}</td>{% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in rows %}
+      <tr>
+        <td>{{ r.sl }}</td><td>{{ r.code }}</td><td class="l">{{ r.name }}</td>
+        <td class="l">{{ r.desig }}</td><td class="l">{{ r.dept }}</td>
+        <td>{{ r.duration }}</td><td>{{ r.wperiod }}</td>
+        <td>{{ r.days }}</td><td>{{ r.ot }}</td>
+        <td class="r">{{ "{:,.0f}".format(r.rb) }}</td><td class="r">{{ "{:,.0f}".format(r.rda) }}</td><td class="r">{{ "{:,.0f}".format(r.roth) }}</td>
+        <td class="r">{{ "{:,.0f}".format(r.e_basic) }}</td><td class="r">{{ "{:,.0f}".format(r.e_da) }}</td><td class="r">{{ "{:,.0f}".format(r.e_allow) }}</td>
+        <td class="r">{{ "{:,.0f}".format(r.e_ot) }}</td><td class="r"><b>{{ "{:,.0f}".format(r.e_total) }}</b></td>
+        <td class="r">{{ "{:,.0f}".format(r.epf) }}</td><td class="r">{{ "{:,.0f}".format(r.esic) }}</td><td class="r">0</td>
+        <td class="r">{{ "{:,.0f}".format(r.it) }}</td><td class="r">{{ "{:,.0f}".format(r.ins) }}</td><td class="r">0</td>
+        <td class="r">0</td><td class="r">0</td><td class="r"><b>{{ "{:,.0f}".format(r.ded) }}</b></td><td class="r">{{ "{:,.0f}".format(r.others) }}</td>
+        <td class="r"><b>{{ "{:,.0f}".format(r.net) }}</b></td><td>{{ r.date_pay }}</td><td class="l">Bank Transfer</td>
+        <td></td><td></td><td></td><td></td>
+      </tr>
+      {% endfor %}
+      <tr class="total">
+        <td colspan="9">TOTAL ({{ rows|length }} Employees)</td>
+        <td></td><td></td><td></td>
+        <td class="r">{{ "{:,.0f}".format(totals.e_basic) }}</td><td class="r">{{ "{:,.0f}".format(totals.e_da) }}</td>
+        <td class="r">{{ "{:,.0f}".format(totals.e_allow) }}</td><td class="r">{{ "{:,.0f}".format(totals.e_ot) }}</td><td class="r">{{ "{:,.0f}".format(totals.e_total) }}</td>
+        <td class="r">{{ "{:,.0f}".format(totals.epf) }}</td><td class="r">{{ "{:,.0f}".format(totals.esic) }}</td><td></td>
+        <td class="r">{{ "{:,.0f}".format(totals.it) }}</td><td class="r">{{ "{:,.0f}".format(totals.ins) }}</td><td></td><td></td><td></td>
+        <td class="r">{{ "{:,.0f}".format(totals.ded) }}</td><td class="r">{{ "{:,.0f}".format(totals.others) }}</td>
+        <td class="r">{{ "{:,.0f}".format(totals.net) }}</td><td></td><td></td><td></td><td></td><td></td><td></td>
+      </tr>
+    </tbody>
+  </table>
+  <div class="note">*Note: Required in case register is maintained physically.</div>
+</div>
+</body>
+</html>

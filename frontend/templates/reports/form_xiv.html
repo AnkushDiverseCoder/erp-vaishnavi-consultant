@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>FORM-XIV Attendance Register — {{ est.company_name }} — {{ payroll.period_display }}</title>
+<style>
+  @page { size: A3 landscape; margin: 6mm; }
+  * { box-sizing: border-box; }
+  body { font-family: Arial, sans-serif; color:#000; margin:0; }
+  .bar { background:#1f4e79; color:#fff; padding:8px 14px; display:flex; justify-content:space-between; align-items:center; }
+  .bar button { background:#fff; color:#1f4e79; border:none; padding:6px 16px; border-radius:4px; font-weight:700; cursor:pointer; }
+  .wrap { padding:4px 8px; }
+  .t1 { text-align:center; font-size:14px; font-weight:800; }
+  .t2 { text-align:center; font-size:8px; font-style:italic; }
+  .t3 { text-align:center; font-size:11px; font-weight:700; }
+  .info { font-size:8px; margin:4px 2px; }
+  table { border-collapse:collapse; width:100%; table-layout:fixed; }
+  th,td { border:0.4px solid #000; padding:0 1px; font-size:6px; text-align:center; overflow:hidden; }
+  thead th { background:#1f4e79; color:#fff; }
+  thead .grp { background:#2e75b6; }
+  td.l { text-align:left; font-size:7px; }
+  .info-col { width:1.6%; }
+  .day-col { width:0.95%; }
+  .tail-col { width:2.6%; }
+  .wo { color:#c00000; font-weight:700; }
+  .hol { color:#2e75b6; font-weight:700; }
+  .ab { color:#808080; font-weight:700; }
+  .note { font-size:8px; font-style:italic; margin-top:4px; }
+  @media print { .no-print { display:none !important; } }
+</style>
+</head>
+<body>
+<div class="bar no-print">
+  <div><strong>FORM-XIV — Attendance Register-cum-Muster Roll (Revised)</strong> — {{ est.company_name }} — {{ payroll.period_display }}</div>
+  <div><button onclick="window.print()">🖨 Print / Save PDF (A3)</button>
+       <a href="{{ url_for('reports.form_xiv_excel', payroll_id=payroll.id) }}" style="color:#fff; margin-left:10px; font-size:12px;">⬇ Excel</a></div>
+</div>
+<div class="wrap">
+  <div class="t1">FORM-IX / FORM-XIV</div>
+  <div class="t2">(See clause (iii) of Sub Rule (1) of 51) / (See Rule 72 (1)(ii))</div>
+  <div class="t3">ATTENDANCE REGISTER-CUM-MUSTER ROLL</div>
+  <div class="info">
+    <b>Name of the Establishment:</b> {{ est.company_name }}{% if est.branch_name %} ({{ est.branch_name }}){% endif %} &nbsp;|&nbsp;
+    <b>Employer:</b> {{ est.contact_person or est.company_name }} &nbsp;|&nbsp;
+    <b>Owner:</b> {{ est.contact_person or est.company_name }} &nbsp;|&nbsp;
+    <b>Reg. No / LIN:</b> {{ est.pf_code or est.esic_code or '—' }} &nbsp;|&nbsp;
+    <b>For the Month of:</b> {{ payroll.period_display }}
+  </div>
+  <table>
+    <colgroup>
+      <col class="info-col" style="width:2.2%"><col class="info-col" style="width:3%"><col style="width:9%">
+      <col class="info-col" style="width:4%"><col class="info-col" style="width:2.5%"><col class="info-col" style="width:5%">
+      {% for d in day_range %}<col class="day-col"><col class="day-col">{% endfor %}
+      <col class="tail-col"><col class="tail-col"><col class="tail-col"><col class="tail-col">
+    </colgroup>
+    <thead>
+      <tr>
+        <th rowspan="3">S. No</th><th rowspan="3">Employee Code</th><th rowspan="3">Name of the Employee</th>
+        <th rowspan="3">Designation</th><th rowspan="3">Shift</th><th rowspan="3">Place of Work / Section / Dept.</th>
+        <th class="grp" colspan="{{ ndays * 2 }}">Date &amp; Time of Attendance</th>
+        <th rowspan="3">Total No. of Days Worked</th><th rowspan="3">Total No. of OT Hours</th>
+        <th rowspan="3">Brief details of tour/assignment outside work place</th><th rowspan="3">*Signature of Register Keeper</th>
+      </tr>
+      <tr>{% for d in day_range %}<th colspan="2">{{ d }}</th>{% endfor %}</tr>
+      <tr>{% for d in day_range %}<th>IN</th><th>OUT</th>{% endfor %}</tr>
+    </thead>
+    <tbody>
+      {% for r in rows %}
+      <tr>
+        <td>{{ r.sl }}</td><td>{{ r.code }}</td><td class="l">{{ r.name }}</td>
+        <td class="l">{{ r.desig }}</td><td>{{ r.shift if r.shift is defined else 'General' }}</td><td class="l">{{ r.dept }}</td>
+        {% for din, dout, cls in r.days %}
+          <td class="{{ cls }}">{{ din }}</td><td class="{{ cls }}">{{ dout }}</td>
+        {% endfor %}
+        <td><b>{{ r.total_days }}</b></td><td>{{ r.ot }}</td><td></td><td></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <div class="note">Legend: <span class="wo">W/O</span> = Weekly Off, <span class="hol">H</span> = Holiday, <span class="ab">A</span> = Absent, 09:00/18:00 = standard IN/OUT time. &nbsp; *Required in case Register is maintained physically.</div>
+</div>
+</body>
+</html>

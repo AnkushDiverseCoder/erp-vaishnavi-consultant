@@ -332,6 +332,78 @@ def form_b_excel(payroll_id):
     )
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+#  REVISED STATUTORY FORMS (Karnataka) — added ALONGSIDE the existing reports
+#    FORM-XV  = Register of Wages/OT/Deductions  (revised wage register)
+#    FORM-XVI = Wage Slip                        (revised pay slip)
+#    FORM-XIV = Attendance Register-cum-Muster Roll
+#  Each: an Excel download (fits Legal/A4/A3) + an HTML view for Print → PDF.
+# ═══════════════════════════════════════════════════════════════════════════
+_XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+
+
+def _revised_excel(payroll_id, builder, tag):
+    from app.services import statutory_forms as _sf
+    from app.utils.naming import short_est_code
+    payroll, est, config, entries, heads = _get_payroll_data(payroll_id)
+    head_map = _map_heads_to_form_b(heads)
+    rows = _build_form_b_rows(entries, heads, head_map, config, payroll)
+    out = builder(payroll, est, config, entries, rows)
+    fname = f"{tag}_{short_est_code(est.company_name)}_{calendar.month_abbr[payroll.month]}{payroll.year}.xlsx"
+    return send_file(out, mimetype=_XLSX_MIME, as_attachment=True, download_name=fname)
+
+
+@reports_bp.route('/payroll/<int:payroll_id>/report/form-xv/excel')
+def form_xv_excel(payroll_id):
+    from app.services.statutory_forms import build_form_xv
+    return _revised_excel(payroll_id, build_form_xv, "FORM-XV_Wage_Register")
+
+
+@reports_bp.route('/payroll/<int:payroll_id>/report/form-xv')
+def form_xv_view(payroll_id):
+    from app.services import statutory_forms as _sf
+    payroll, est, config, entries, heads = _get_payroll_data(payroll_id)
+    head_map = _map_heads_to_form_b(heads)
+    rows = _build_form_b_rows(entries, heads, head_map, config, payroll)
+    xrows, totals, wpf, wpt = _sf.xv_rows(payroll, est, config, entries, rows)
+    return render_template('reports/form_xv.html', payroll=payroll, est=est, config=config,
+                           rows=xrows, totals=totals, wpf=wpf, wpt=wpt)
+
+
+@reports_bp.route('/payroll/<int:payroll_id>/report/form-xvi/excel')
+def form_xvi_excel(payroll_id):
+    from app.services.statutory_forms import build_form_xvi
+    return _revised_excel(payroll_id, build_form_xvi, "FORM-XVI_Wage_Slip")
+
+
+@reports_bp.route('/payroll/<int:payroll_id>/report/form-xvi')
+def form_xvi_view(payroll_id):
+    from app.services import statutory_forms as _sf
+    payroll, est, config, entries, heads = _get_payroll_data(payroll_id)
+    head_map = _map_heads_to_form_b(heads)
+    rows = _build_form_b_rows(entries, heads, head_map, config, payroll)
+    slips, wpf, wpt = _sf.xvi_slips(payroll, est, config, entries, rows)
+    return render_template('reports/form_xvi.html', payroll=payroll, est=est, config=config,
+                           slips=slips, wpf=wpf, wpt=wpt)
+
+
+@reports_bp.route('/payroll/<int:payroll_id>/report/form-xiv/excel')
+def form_xiv_excel(payroll_id):
+    from app.services.statutory_forms import build_form_xiv
+    return _revised_excel(payroll_id, build_form_xiv, "FORM-XIV_Attendance_Register")
+
+
+@reports_bp.route('/payroll/<int:payroll_id>/report/form-xiv')
+def form_xiv_view(payroll_id):
+    from app.services import statutory_forms as _sf
+    payroll, est, config, entries, heads = _get_payroll_data(payroll_id)
+    head_map = _map_heads_to_form_b(heads)
+    rows = _build_form_b_rows(entries, heads, head_map, config, payroll)
+    arows, ndays = _sf.attendance_rows(payroll, est, config, entries, rows)
+    return render_template('reports/form_xiv.html', payroll=payroll, est=est, config=config,
+                           rows=arows, ndays=ndays, day_range=list(range(1, ndays + 1)))
+
+
 # =============================================
 # ATTENDANCE: Random Marks Generation Logic
 # =============================================
@@ -2212,6 +2284,7 @@ def _build_form_b_rows(entries, heads, head_map, config, payroll):
 
         row = {
             'sl': 0,  # Will be set in loop
+            '_entry_id': entry.id,   # used by the revised statutory-form generators
             'emp_code': emp.internal_emp_code if emp.use_internal_code and emp.internal_emp_code else emp.emp_code,
             'uan': emp.uan_number or '',
             'esic_ip': emp.esic_ip_number or 'NA',

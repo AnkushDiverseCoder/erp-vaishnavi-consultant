@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>FORM-XVI Wage Slip — {{ est.company_name }} — {{ payroll.period_display }}</title>
+<style>
+  @page { size: A4 portrait; margin: 10mm; }
+  * { box-sizing: border-box; }
+  body { font-family: Arial, sans-serif; color:#000; margin:0; font-size:11px; }
+  .bar { background:#1f4e79; color:#fff; padding:8px 14px; display:flex; justify-content:space-between; align-items:center; }
+  .bar button { background:#fff; color:#1f4e79; border:none; padding:6px 16px; border-radius:4px; font-weight:700; cursor:pointer; }
+  .wrap { padding:8px 12px; }
+  .slip { border:1px solid #000; margin-bottom:14px; page-break-inside:avoid; }
+  .slip:nth-of-type(2n) { page-break-after:always; }
+  .st1 { text-align:center; font-size:12px; font-weight:800; padding:4px; }
+  .st2 { text-align:center; font-size:13px; font-weight:800; padding-bottom:4px; border-bottom:1px solid #000; }
+  table { border-collapse:collapse; width:100%; }
+  td { border:0.5px solid #000; padding:3px 6px; font-size:10.5px; vertical-align:top; }
+  .lbl { font-weight:700; width:44%; }
+  .sn { width:6%; text-align:center; }
+  .hdr td { background:#1f4e79; color:#fff; font-weight:700; text-align:center; }
+  .kv td { border:none; padding:2px 6px; }
+  .words { font-style:italic; font-size:10px; }
+  .sign td { height:36px; text-align:center; vertical-align:bottom; }
+  .note { font-size:9px; font-style:italic; padding:2px 6px; }
+  @media print { .no-print { display:none !important; } }
+</style>
+</head>
+<body>
+<div class="bar no-print">
+  <div><strong>FORM-XVI — Wage Slip (Revised)</strong> — {{ est.company_name }} — {{ payroll.period_display }} — {{ slips|length }} slip(s)</div>
+  <div><button onclick="window.print()">🖨 Print / Save PDF</button>
+       <a href="{{ url_for('reports.form_xvi_excel', payroll_id=payroll.id) }}" style="color:#fff; margin-left:10px; font-size:12px;">⬇ Excel</a></div>
+</div>
+<div class="wrap">
+  {% for s in slips %}
+  <div class="slip">
+    <div class="st1">FORM-V (See Rule 52) &nbsp;/&nbsp; FORM-XVI [See Rule 72(2)]</div>
+    <div class="st2">WAGE SLIP</div>
+    <table>
+      <tr class="kv"><td class="lbl">Date of Issue</td><td>{{ wpt }}</td></tr>
+      <tr class="kv"><td class="lbl">Name of the Establishment</td><td>{{ est.company_name }}</td></tr>
+      <tr class="kv"><td class="lbl">Address</td><td>{{ est.address or '' }}</td></tr>
+      <tr class="kv"><td class="lbl">Period</td><td>{{ payroll.period_display }}</td></tr>
+    </table>
+    <table>
+      <tr class="hdr"><td class="sn">S.No</td><td class="lbl">Details</td><td>Particulars</td></tr>
+      <tr><td class="sn">1</td><td class="lbl">Name of the Employee</td><td>{{ s.name }}</td></tr>
+      <tr><td class="sn">2</td><td class="lbl">Father's / Mother's / Spouse Name</td><td>{{ s.father }}</td></tr>
+      <tr><td class="sn">3</td><td class="lbl">Designation</td><td>{{ s.desig }}</td></tr>
+      <tr><td class="sn">4</td><td class="lbl">UAN</td><td>{{ s.uan }}</td></tr>
+      <tr><td class="sn">5</td><td class="lbl">Bank Account Number</td><td>{{ s.bank }}</td></tr>
+      <tr><td class="sn">6</td><td class="lbl">Wage Period</td><td>{{ s.wperiod }}</td></tr>
+      <tr><td class="sn">7</td><td class="lbl">Rate of Wages Payable</td><td>(a) Basic {{ "{:,.0f}".format(s.rb) }} &nbsp; (b) DA {{ "{:,.0f}".format(s.rda) }} &nbsp; (c) Other Allow. {{ "{:,.0f}".format(s.roth) }}</td></tr>
+      <tr><td class="sn">8</td><td class="lbl">Total Attendance / Unit of Work Done</td><td>{{ s.days }} days</td></tr>
+      <tr><td class="sn">9</td><td class="lbl">Overtime Wages</td><td>{{ "{:,.0f}".format(s.ot) }}</td></tr>
+      <tr><td class="sn">10</td><td class="lbl">Gross Wages Payable</td><td><b>{{ "{:,.0f}".format(s.gross) }}</b></td></tr>
+      <tr><td class="sn">11</td><td class="lbl">Total Deductions</td><td>{{ "{:,.0f}".format(s.total_ded) }} &nbsp; [(a) EPF {{ "{:,.0f}".format(s.epf) }} (b) ESI {{ "{:,.0f}".format(s.esic) }} (c) Others {{ "{:,.0f}".format(s.others) }}]</td></tr>
+      <tr><td class="sn">12</td><td class="lbl">Net Wages Paid</td><td><b>{{ "{:,.0f}".format(s.net) }}</b></td></tr>
+    </table>
+    <table>
+      <tr><td class="words">Amount in Words: Rupees {{ "{:,.0f}".format(s.net) }} only</td></tr>
+    </table>
+    <table>
+      <tr class="sign"><td style="width:50%;">Employee Signature</td><td>Employer / Pay-in-Charge Signature</td></tr>
+    </table>
+    <div class="note">*Note: Required in case register is maintained physically.</div>
+  </div>
+  {% endfor %}
+</div>
+</body>
+</html>
