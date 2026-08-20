@@ -454,6 +454,9 @@ def create_app():
         # Seed any newly added account heads for existing DBs
         _seed_missing_account_heads()
 
+        # Backfill the new 'Special Allowance' head for existing establishments
+        _backfill_special_allowance(db)
+
         # Password Generator (env-gated, like a seeder): one-shot Clerk → JWT
         # credential migration. Runs only when PASSWORD_GENERATOR is truthy.
         # Idempotent — only touches users that have no password yet.
@@ -965,6 +968,42 @@ def _seed_default_accounts():
         db.session.add(h)
 
     db.session.commit()
+
+
+def _backfill_special_allowance(db):
+    """Ensure every establishment that has the standard heads also has a
+    'Special Allowance' (SPL_ALW) head, inserted just before 'Other Allowance'
+    so it appears in the universal upload template. Idempotent — only adds it
+    where missing, and leaves establishments without the standard heads alone."""
+    try:
+        from app.models.payroll import SalaryHead
+        oth_ests = {e for (e,) in SalaryHead.query.filter_by(short_code='OTH_ALW')
+                    .with_entities(SalaryHead.establishment_id).all()}
+        spl_ests = {e for (e,) in SalaryHead.query.filter_by(short_code='SPL_ALW')
+                    .with_entities(SalaryHead.establishment_id).all()}
+        todo = oth_ests - spl_ests
+        if not todo:
+            return
+        for eid in todo:
+            oth = SalaryHead.query.filter_by(establishment_id=eid, short_code='OTH_ALW').first()
+            if not oth:
+                continue
+            pos = oth.display_order if oth.display_order is not None else 5
+            # Make room: shift every head at/after OTH_ALW down by one.
+            SalaryHead.query.filter(
+                SalaryHead.establishment_id == eid,
+                SalaryHead.display_order >= pos,
+            ).update({SalaryHead.display_order: SalaryHead.display_order + 1},
+                     synchronize_session=False)
+            db.session.add(SalaryHead(
+                establishment_id=eid, name='Special Allowance', short_code='SPL_ALW',
+                head_type='earning', calc_type='fixed', is_for_compliance=False,
+                exclude_from_esic=False, is_in_gross=True, display_order=pos))
+        db.session.commit()
+        print(f'[MIGRATE] Special Allowance head added to {len(todo)} establishment(s)')
+    except Exception as e:
+        db.session.rollback()
+        print(f'[MIGRATE] SPL_ALW backfill error: {e}')
 
 
 def _seed_missing_account_heads():

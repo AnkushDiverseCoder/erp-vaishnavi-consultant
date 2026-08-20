@@ -206,8 +206,9 @@ def _create_default_salary_heads(est_id):
         ('Dearness Allowance', 'DA', 'earning', 'fixed', None, None, True, False, True, 2),
         ('House Rent Allowance', 'HRA', 'earning', 'fixed', None, None, False, False, True, 3),
         ('Conveyance Allowance', 'CONV', 'earning', 'fixed', None, None, False, False, True, 4),
-        ('Other Allowance', 'OTH_ALW', 'earning', 'fixed', None, None, False, False, True, 5),
-        ('Wash Allowance', 'WASH', 'earning', 'fixed', None, None, False, True, True, 6),
+        ('Special Allowance', 'SPL_ALW', 'earning', 'fixed', None, None, False, False, True, 5),
+        ('Other Allowance', 'OTH_ALW', 'earning', 'fixed', None, None, False, False, True, 6),
+        ('Wash Allowance', 'WASH', 'earning', 'fixed', None, None, False, True, True, 7),
     ]
 
     for name, code, htype, ctype, pv, poh, compliance, esic_excl, in_gross, order in defaults:
