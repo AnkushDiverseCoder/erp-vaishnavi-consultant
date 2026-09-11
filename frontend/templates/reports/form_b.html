@@ -162,14 +162,7 @@
                 <th rowspan="2" style="min-width:80px;">UAN /<br>ESIC IP</th>
                 <th rowspan="2" style="min-width:160px; text-align:left;">Name</th>
                 <th rowspan="2">Rate of<br>Wages</th>
-                {% if config.lop_system_enabled %}
-                <th rowspan="2" style="background:#fef3c7;">Month<br>Days</th>
-                <th rowspan="2" style="background:#fef3c7;">Loss of Pay<br>(Absent)</th>
-                <th rowspan="2" style="background:#fef3c7;">Worked on<br>Weekly<br>Rest Day</th>
-                <th rowspan="2">Total<br>Attendance<br>Paid</th>
-                {% else %}
                 <th rowspan="2">No. of<br>Days<br>worked</th>
-                {% endif %}
                 <th rowspan="2">Paid<br>Holidays</th>
                 <th rowspan="2">Overtime<br>worked in<br>days</th>
                 <th rowspan="2">Basic</th>
@@ -199,7 +192,7 @@
         </thead>
         <tbody>
             {% set ns = namespace(
-                t_days=0, t_ph=0, t_ot=0, t_lop=0, t_wr=0,
+                t_days=0, t_ph=0, t_ot=0,
                 t_basic=0, t_spl=0, t_da=0, t_ot_amt=0, t_hra=0, t_others=0, t_nph=0,
                 t_gross=0, t_pf=0, t_esic=0, t_pt=0, t_it=0, t_ins=0, t_lwf=0, t_rec=0,
                 t_total_ded=0, t_net=0
@@ -211,14 +204,7 @@
                 <td class="text-center" style="font-size:0.75rem;">{% if config.epf_applicable %}{{ row.uan or '—' }}{% else %}{{ row.esic_ip or '—' }}{% endif %}</td>
                 <td style="text-align:left; font-weight:600;">{{ row.name }}</td>
                 <td class="text-right">{{ "%.2f"|format(row.rate) }}</td>
-                {% if config.lop_system_enabled %}
-                <td class="text-center" style="background:#fffbeb;">{{ row.month_days|int }}</td>
-                <td class="text-center" style="background:#fffbeb;">{{ row.lop_days|int if row.lop_days == row.lop_days|int else "%.1f"|format(row.lop_days) }}</td>
-                <td class="text-center" style="background:#fffbeb;">{{ row.wr_days|int if row.wr_days == row.wr_days|int else "%.1f"|format(row.wr_days) }}</td>
                 <td class="text-center">{{ row.days_worked|int if row.days_worked == row.days_worked|int else "%.1f"|format(row.days_worked) }}</td>
-                {% else %}
-                <td class="text-center">{{ row.days_worked|int if row.days_worked == row.days_worked|int else "%.1f"|format(row.days_worked) }}</td>
-                {% endif %}
                 <td class="text-center">{{ row.ph_days|int if row.ph_days else 0 }}</td>
                 <td class="text-center">{{ row.ot_days|int if row.ot_days == row.ot_days|int else "%.2f"|format(row.ot_days) }}</td>
                 <td class="text-right">{{ row.basic|int }}</td>
@@ -243,8 +229,6 @@
                 <td></td>
             </tr>
             {% set ns.t_days = ns.t_days + row.days_worked %}
-            {% set ns.t_lop = ns.t_lop + (row.lop_days or 0) %}
-            {% set ns.t_wr = ns.t_wr + (row.wr_days or 0) %}
             {% set ns.t_ph = ns.t_ph + (row.ph_days or 0) %}
             {% set ns.t_ot = ns.t_ot + row.ot_days %}
             {% set ns.t_basic = ns.t_basic + row.basic %}
@@ -269,11 +253,6 @@
                     <strong>TOTAL ({{ rows|length }} Employees)</strong>
                 </td>
                 <td></td>
-                {% if config.lop_system_enabled %}
-                <td></td>
-                <td class="text-center">{{ ns.t_lop|int }}</td>
-                <td class="text-center">{{ ns.t_wr|int }}</td>
-                {% endif %}
                 <td class="text-center">{{ ns.t_days|int }}</td>
                 <td class="text-center">{{ ns.t_ph|int }}</td>
                 <td class="text-center">{{ "%.0f"|format(ns.t_ot) }}</td>

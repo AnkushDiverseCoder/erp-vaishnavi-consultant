@@ -87,6 +87,8 @@ QUICK_REPORT_TYPES = [
     ('attendance_view',  'Attendance Sheet (View)',            'reports.attendance_view',          'Statutory'),
     ('attendance_excel', 'Attendance Sheet (Excel)',           'reports.attendance_excel',         'Statutory'),
     # Salary Statements
+    ('client_stmt_view', 'Client Salary Statement — All-in-One (View)',  'reports.client_statement_view',  'Salary Statement'),
+    ('client_stmt_excel','Client Salary Statement — All-in-One (Excel)', 'reports.client_statement_excel', 'Salary Statement'),
     ('statement_f2',     'Salary Statement — Format 2',        'reports.statement_format2',        'Salary Statement'),
     ('statement_f3',     'Salary Statement — Format 3',        'reports.statement_format3',        'Salary Statement'),
     # EPF / ESIC
@@ -1513,7 +1515,7 @@ def _generate_form_d_excel(payroll, est, config, attendance, num_days, rest_days
     # Title area
     # Columns: A=Sl, B=Name, C=Relay, D=Place, E..E+num_days-1=Days,
     #   [Loss of Pay, Worked Weekly Rest — when LOP system on], Summary, Remarks, Signature
-    _lop_on = bool(getattr(config, 'lop_system_enabled', False))
+    _lop_on = False  # LOP columns are shown ONLY on the internal Client Salary Statement, never on the government-format reports
     day_start_col = 5  # Column E
     last_day_col = day_start_col + num_days - 1
     if _lop_on:
@@ -1870,7 +1872,7 @@ def _generate_form_d_2625_excel(payroll, est, config, attendance, date_list, num
 
     # Columns: A=Sl, B=Name, C=Designation, D=Place, E..E+num_cols-1=Days,
     #   [Loss of Pay, Worked Weekly Rest — when LOP on], Summary, Remarks, Signature
-    _lop_on = bool(getattr(config, 'lop_system_enabled', False))
+    _lop_on = False  # LOP columns are shown ONLY on the internal Client Salary Statement, never on the government-format reports
     day_start_col = 5  # Column E
     last_day_col = day_start_col + num_cols - 1
     if _lop_on:
@@ -2193,7 +2195,7 @@ def _generate_attendance_excel(payroll, est, config, attendance, num_days, rest_
     # Layout: A=Sr, B=Name, C=UAN, D=ESIC, E..=Days, then summary columns.
     # Classic summary = Pres, Abs, PH, Total. With the LOP system on, Abs is
     # replaced by two manual columns: Pres, LOP, Wkly Rest, PH, Total.
-    _lop_on = bool(getattr(config, 'lop_system_enabled', False))
+    _lop_on = False  # LOP columns are shown ONLY on the internal Client Salary Statement, never on the government-format reports
     _sum_labels = ['Pres', 'LOP', 'Wkly Rest', 'PH', 'Total'] if _lop_on else ['Pres', 'Abs', 'PH', 'Total']
     _n_sum = len(_sum_labels)
     day_start = 5
@@ -2535,7 +2537,7 @@ def _generate_form_b_excel(payroll, est, config, entries, rows, head_map):
     # ── Loss-of-Pay system: three extra day columns (Month Days / Loss of Pay /
     #    Worked on Weekly Rest) inserted after "Rate of Wages", and the days
     #    column relabelled "Total Attendance Paid". Default OFF → classic A-AA. ──
-    _lop_on = bool(getattr(config, 'lop_system_enabled', False))
+    _lop_on = False  # LOP columns are shown ONLY on the internal Client Salary Statement, never on the government-format reports
     _epf_on = getattr(config, 'epf_applicable', False)
     _col_b_header = 'UAN' if _epf_on else 'ESIC IP\nNo.'
 
@@ -2842,6 +2844,392 @@ def _generate_form_b_excel(payroll, est, config, entries, rows, head_map):
     ws.page_margins = PageMargins(left=0.5, right=0.3, top=0.4, bottom=0.4, header=0.2, footer=0.2)
 
     # Save to BytesIO
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+    return output
+
+
+# ============================================================
+# Universal Client Salary Statement (Internal — all-in-one)
+# ------------------------------------------------------------
+# A single internal statement for the establishment/client that works for
+# EVERY wage type (Daily / Monthly / CTC) in one report. Unlike the
+# government-format reports it may carry extra columns:
+#   • Loss-of-Pay day columns (when the LOP system is on)
+#   • Employer share (EPF employer, ESIC employer) and the true CTC/cost
+# and it closes with payable-summary panels: EPF, ESIC, PT and Advance.
+# Zero-salary employees are already excluded via _get_payroll_data.
+# ============================================================
+
+def _build_client_statement_data(payroll_id):
+    import calendar as _cal
+    payroll, est, config, entries, heads = _get_payroll_data(payroll_id)
+
+    lop_on = bool(getattr(config, 'lop_system_enabled', False))
+    # Month-days basis for the LOP columns (mirrors payroll lop_divisor)
+    _lb = getattr(config, 'lop_divisor', 'calendar') or 'calendar'
+    if _lb in ('26', '30'):
+        month_days = int(_lb)
+    else:
+        month_days = _cal.monthrange(payroll.year, payroll.month)[1]
+
+    def _wage_label(st):
+        if st == 'daily_wages':
+            return 'Daily'
+        if st == 'monthly_package':
+            return 'CTC'
+        return 'Monthly'
+
+    rows = []
+    summary = {
+        'gross': 0, 'ot_amt': 0, 'nph': 0,
+        'epf_ee': 0, 'epf_ac01': 0, 'epf_eps': 0, 'epf_edli': 0, 'epf_admin': 0, 'epf_er': 0,
+        'esic_ee': 0, 'esic_er': 0, 'pt': 0, 'adv': 0, 'total_ded': 0, 'net': 0,
+        'ctc': 0, 'count': 0,
+        'head_totals': {},
+    }
+
+    for idx, entry in enumerate(entries, 1):
+        emp = entry.employee
+        st = getattr(entry, '_salary_type', 'monthly_fixed')
+        is_daily = (st == 'daily_wages')
+        rate = (entry._daily_rate if is_daily and getattr(entry, '_daily_rate', 0)
+                else (getattr(entry, '_effective_gross', 0) or entry.gross_salary or 0))
+
+        epf_er = round((entry.epf_ac01 or 0) + (entry.epf_eps or 0)
+                       + (entry.epf_edli or 0) + (entry.epf_admin or 0))
+        esic_er = round(entry.esic_employer or 0)
+        gross = round(entry.total_earnings or 0)
+        adv = round(entry.other_deduction or 0)
+        ctc = gross + epf_er + esic_er
+
+        head_vals = {}
+        for h in heads:
+            peh = entry.head_amounts.get(h.id)
+            amt = round(peh.earned_amount) if peh and peh.earned_amount else 0
+            head_vals[h.id] = amt
+            summary['head_totals'][h.id] = summary['head_totals'].get(h.id, 0) + amt
+
+        row = {
+            'sr': idx,
+            'code': (emp.uan_number or '') if getattr(config, 'epf_applicable', False) else (
+                emp.internal_emp_code if emp.use_internal_code and emp.internal_emp_code else emp.emp_code),
+            'uan': emp.uan_number or '',
+            'esic_ip': emp.esic_ip_number or 'NA',
+            'name': emp.name,
+            'designation': emp.designation or '',
+            'wage_type': _wage_label(st),
+            'rate': rate,
+            'month_days': month_days,
+            'lop': getattr(entry, 'lop_days', 0) or 0,
+            'wr': getattr(entry, 'weekly_rest_worked_days', 0) or 0,
+            'days': entry.days_present,
+            'ph': entry.paid_holidays or 0,
+            'ot_days': entry.ot_hours or 0,
+            'heads': head_vals,
+            'ot_amt': round(entry.ot_amount or 0),
+            'nph': round(getattr(entry, '_nph_amount', 0) or 0),
+            'gross': gross,
+            'epf_ee': round(entry.epf_employee or 0),
+            'epf_ac01': round(entry.epf_ac01 or 0),
+            'epf_eps': round(entry.epf_eps or 0),
+            'epf_edli': round(entry.epf_edli or 0),
+            'epf_admin': round(entry.epf_admin or 0),
+            'epf_er': epf_er,
+            'esic_ee': round(entry.esic_employee or 0),
+            'esic_er': esic_er,
+            'pt': round(entry.professional_tax or 0),
+            'adv': adv,
+            'total_ded': round(entry.total_deductions or 0),
+            'net': round(entry.net_pay or 0),
+            'ctc': ctc,
+        }
+        rows.append(row)
+
+        for k in ('ot_amt', 'nph', 'gross', 'epf_ee', 'epf_ac01', 'epf_eps', 'epf_edli',
+                  'epf_admin', 'epf_er', 'esic_ee', 'esic_er', 'pt', 'adv', 'total_ded', 'net', 'ctc'):
+            summary[k] += row[k]
+        summary['count'] += 1
+
+    # Payable-summary panels
+    summary['epf_challan'] = (summary['epf_ee'] + summary['epf_ac01'] + summary['epf_eps']
+                              + summary['epf_edli'] + summary['epf_admin'])
+    summary['esic_challan'] = summary['esic_ee'] + summary['esic_er']
+
+    return payroll, est, config, heads, rows, summary, lop_on, month_days
+
+
+@reports_bp.route('/payroll/<int:payroll_id>/report/client-statement')
+def client_statement_view(payroll_id):
+    """Universal Client Salary Statement — internal all-in-one HTML view."""
+    payroll, est, config, heads, rows, summary, lop_on, month_days = _build_client_statement_data(payroll_id)
+    generated_on = datetime.now().strftime('%d %b %Y, %I:%M %p')
+    return render_template('reports/client_salary_statement.html',
+                           payroll=payroll, est=est, config=config,
+                           heads=heads, rows=rows, summary=summary,
+                           lop_on=lop_on, month_days=month_days,
+                           generated_on=generated_on)
+
+
+@reports_bp.route('/payroll/<int:payroll_id>/report/client-statement/excel')
+def client_statement_excel(payroll_id):
+    """Universal Client Salary Statement — internal all-in-one Excel."""
+    payroll, est, config, heads, rows, summary, lop_on, month_days = _build_client_statement_data(payroll_id)
+    output = _generate_client_statement_excel(payroll, est, config, heads, rows, summary, lop_on)
+    filename = f"ClientStatement_{short_est_code(est.company_name)}_{calendar.month_abbr[payroll.month]}{payroll.year}.xlsx"
+    return send_file(output, as_attachment=True, download_name=filename,
+                     mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
+
+def _generate_client_statement_excel(payroll, est, config, heads, rows, summary, lop_on):
+    """All-in-one internal salary statement: dynamic heads + employer share +
+    CTC + LOP columns, closed with EPF / ESIC / PT / Advance payable panels."""
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
+    from openpyxl.utils import get_column_letter
+    from openpyxl.worksheet.page import PageMargins
+    from openpyxl.worksheet.properties import PageSetupProperties
+
+    epf_on = getattr(config, 'epf_applicable', False)
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = f"Client Statement {payroll.month_abbr if hasattr(payroll,'month_abbr') else payroll.month}"
+
+    title_font = Font(name='Arial', size=14, bold=True)
+    sub_font = Font(name='Arial', size=10, bold=True)
+    hdr_font = Font(name='Arial', size=8, bold=True, color='FFFFFF')
+    grp_font = Font(name='Arial', size=8, bold=True, color='FFFFFF')
+    data_font = Font(name='Arial', size=9)
+    name_font = Font(name='Arial', size=9, bold=True)
+    bold_font = Font(name='Arial', size=9, bold=True)
+
+    thin = Border(left=Side(style='thin', color='BFBFBF'), right=Side(style='thin', color='BFBFBF'),
+                  top=Side(style='thin', color='BFBFBF'), bottom=Side(style='thin', color='BFBFBF'))
+    center = Alignment(horizontal='center', vertical='center', wrap_text=True)
+    left = Alignment(horizontal='left', vertical='center', wrap_text=True)
+    right = Alignment(horizontal='right', vertical='center')
+
+    fills = {
+        'id':   PatternFill('solid', fgColor='1E40AF'),
+        'rate': PatternFill('solid', fgColor='7C3AED'),
+        'att':  PatternFill('solid', fgColor='0D9488'),
+        'earn': PatternFill('solid', fgColor='059669'),
+        'er':   PatternFill('solid', fgColor='B45309'),
+        'ded':  PatternFill('solid', fgColor='DC2626'),
+        'net':  PatternFill('solid', fgColor='1A237E'),
+    }
+    grp_labels = {'id': 'EMPLOYEE', 'rate': 'RATE', 'att': 'ATTENDANCE', 'earn': 'EARNINGS',
+                  'er': 'EMPLOYER SHARE', 'ded': 'DEDUCTIONS', 'net': 'NET'}
+    total_fill = PatternFill('solid', fgColor='FEF3C7')
+    tint = {'earn': PatternFill('solid', fgColor='E2EFDA'), 'er': PatternFill('solid', fgColor='FDE9D3'),
+            'ded': PatternFill('solid', fgColor='FCE4E4'), 'net': PatternFill('solid', fgColor='D6E4F0')}
+
+    # ── Column spec: (key, label, width, group, is_amount) ──
+    cols = [
+        ('sr', 'Sr.', 5, 'id', False),
+        ('code', 'UAN' if epf_on else 'Code', 14, 'id', False),
+        ('esic_ip', 'ESIC IP', 13, 'id', False),
+        ('name', 'Employee Name', 24, 'id', False),
+        ('wage_type', 'Wage\nType', 9, 'id', False),
+        ('rate', 'Rate /\nGross', 11, 'rate', True),
+        ('month_days', 'Month\nDays', 7, 'att', False),
+    ]
+    if lop_on:
+        cols += [('lop', 'Loss of\nPay', 8, 'att', False), ('wr', 'Wkd\nWkly Rest', 9, 'att', False)]
+    cols += [
+        ('days', 'Total\nAtt. Paid' if lop_on else 'Days\nWorked', 8, 'att', False),
+        ('ph', 'Paid\nHol.', 6, 'att', False), ('ot_days', 'OT\nDays', 6, 'att', False),
+    ]
+    for h in heads:
+        cols.append((f'head_{h.id}', (h.short_code or h.name), 11, 'earn', True))
+    cols += [
+        ('ot_amt', 'OT\nAmt', 10, 'earn', True), ('nph', 'NPH', 9, 'earn', True),
+        ('gross', 'Gross\nEarnings', 13, 'earn', True),
+        ('epf_er', 'EPF\nEmployer', 11, 'er', True), ('esic_er', 'ESIC\nEmployer', 11, 'er', True),
+        ('ctc', 'CTC\n(Cost)', 12, 'er', True),
+        ('epf_ee', 'EPF\n(EE)', 9, 'ded', True), ('esic_ee', 'ESIC\n(EE)', 9, 'ded', True),
+        ('pt', 'PT', 7, 'ded', True), ('adv', 'Advance /\nOther', 11, 'ded', True),
+        ('total_ded', 'Total\nDed.', 11, 'ded', True),
+        ('net', 'Net\nPayable', 13, 'net', True),
+    ]
+
+    ncol = len(cols)
+    last_letter = get_column_letter(ncol)
+
+    # ── Title ──
+    ws.merge_cells(f'A1:{last_letter}1')
+    ws['A1'] = 'CLIENT SALARY STATEMENT (INTERNAL — ALL-IN-ONE)'
+    ws['A1'].font = title_font
+    ws['A1'].alignment = center
+    ws.merge_cells(f'A2:{last_letter}2')
+    ws['A2'] = f'{est.company_name.upper()}' + (f'  ({est.branch_name})' if getattr(est, 'branch_name', None) else '')
+    ws['A2'].font = sub_font
+    ws['A2'].alignment = center
+    ws.merge_cells(f'A3:{last_letter}3')
+    ws['A3'] = f'Salary for the Month of: {payroll.month_name} {payroll.year}   |   Employees: {summary["count"]}'
+    ws['A3'].font = Font(name='Arial', size=10, bold=True, color='B45309')
+    ws['A3'].alignment = center
+
+    # Column widths
+    for i, (k, lbl, w, grp, amt) in enumerate(cols, 1):
+        ws.column_dimensions[get_column_letter(i)].width = w
+
+    grp_row = 5
+    hdr_row = 6
+    # Group header (merge consecutive same-group columns)
+    i = 1
+    while i <= ncol:
+        grp = cols[i - 1][3]
+        j = i
+        while j < ncol and cols[j][3] == grp:
+            j += 1
+        c1, c2 = get_column_letter(i), get_column_letter(j)
+        if i == j:
+            cell = ws[f'{c1}{grp_row}']
+        else:
+            ws.merge_cells(f'{c1}{grp_row}:{c2}{grp_row}')
+            cell = ws[f'{c1}{grp_row}']
+        cell.value = grp_labels.get(grp, '')
+        cell.font = grp_font
+        cell.alignment = center
+        for cc in range(i, j + 1):
+            gc = ws[f'{get_column_letter(cc)}{grp_row}']
+            gc.fill = fills.get(grp)
+            gc.border = thin
+        i = j + 1
+
+    # Column header
+    for i, (k, lbl, w, grp, amt) in enumerate(cols, 1):
+        cell = ws[f'{get_column_letter(i)}{hdr_row}']
+        cell.value = lbl
+        cell.font = hdr_font
+        cell.alignment = center
+        cell.border = thin
+        cell.fill = fills.get(grp)
+    ws.row_dimensions[grp_row].height = 16
+    ws.row_dimensions[hdr_row].height = 30
+
+    # ── Data rows ──
+    data_start = hdr_row + 1
+    for ridx, row in enumerate(rows):
+        r = data_start + ridx
+        for i, (k, lbl, w, grp, amt) in enumerate(cols, 1):
+            cell = ws[f'{get_column_letter(i)}{r}']
+            if k.startswith('head_'):
+                hid = int(k[5:])
+                val = row['heads'].get(hid, 0)
+            else:
+                val = row.get(k, '')
+            cell.value = val
+            cell.border = thin
+            if k == 'name':
+                cell.font = name_font
+                cell.alignment = left
+            elif amt:
+                cell.font = data_font
+                cell.alignment = right
+                cell.number_format = '#,##0.00' if k == 'rate' else '#,##0'
+                if grp in tint:
+                    cell.fill = tint[grp]
+            else:
+                cell.font = data_font
+                cell.alignment = center
+
+    # ── Totals row ──
+    tr = data_start + len(rows)
+    ws.merge_cells(f'A{tr}:D{tr}')
+    ws[f'A{tr}'] = f'TOTAL ({summary["count"]} Employees)'
+    ws[f'A{tr}'].font = bold_font
+    ws[f'A{tr}'].alignment = center
+    for cc in range(1, 5):
+        ws[f'{get_column_letter(cc)}{tr}'].fill = total_fill
+        ws[f'{get_column_letter(cc)}{tr}'].border = thin
+    for i, (k, lbl, w, grp, amt) in enumerate(cols, 1):
+        if i <= 4:
+            continue
+        cell = ws[f'{get_column_letter(i)}{tr}']
+        cell.border = thin
+        cell.fill = total_fill
+        cell.font = bold_font
+        cell.alignment = right if amt else center
+        if k.startswith('head_'):
+            cell.value = summary['head_totals'].get(int(k[5:]), 0)
+            cell.number_format = '#,##0'
+        elif amt and k in summary:
+            cell.value = summary[k]
+            cell.number_format = '#,##0'
+    ws.row_dimensions[tr].height = 20
+
+    # ── Payable-summary panels ──
+    p = tr + 2
+
+    def _panel(title, pairs, color):
+        nonlocal p
+        ws.merge_cells(f'A{p}:C{p}')
+        c = ws[f'A{p}']
+        c.value = title
+        c.font = Font(name='Arial', size=10, bold=True, color='FFFFFF')
+        c.alignment = left
+        for cc in range(1, 4):
+            ws[f'{get_column_letter(cc)}{p}'].fill = PatternFill('solid', fgColor=color)
+            ws[f'{get_column_letter(cc)}{p}'].border = thin
+        p += 1
+        for label, val in pairs:
+            ws[f'A{p}'] = label
+            ws[f'A{p}'].font = Font(name='Arial', size=9)
+            ws[f'A{p}'].border = thin
+            ws.merge_cells(f'B{p}:C{p}')
+            vc = ws[f'B{p}']
+            vc.value = round(val)
+            vc.font = Font(name='Arial', size=9, bold=('Total' in label or 'Challan' in label))
+            vc.alignment = right
+            vc.number_format = '#,##0'
+            vc.border = thin
+            ws[f'C{p}'].border = thin
+            p += 1
+        p += 1
+
+    _panel('EPF PAYABLE SUMMARY', [
+        ('Employee Share (A/c 1 — 12%)', summary['epf_ee']),
+        ('Employer EPF (A/c 1 — 3.67%)', summary['epf_ac01']),
+        ('Employer EPS (A/c 10 — 8.33%)', summary['epf_eps']),
+        ('EDLI (A/c 21 — 0.50%)', summary['epf_edli']),
+        ('Admin Charges (A/c 2 — 0.50%)', summary['epf_admin']),
+        ('TOTAL EPF CHALLAN', summary['epf_challan']),
+    ], '1E40AF')
+
+    _panel('ESIC PAYABLE SUMMARY', [
+        ('Employee Share (0.75%)', summary['esic_ee']),
+        ('Employer Share (3.25%)', summary['esic_er']),
+        ('TOTAL ESIC CHALLAN', summary['esic_challan']),
+    ], '0D9488')
+
+    _panel('PROFESSIONAL TAX (PT) PAYABLE', [
+        ('Total PT Deducted', summary['pt']),
+    ], '7C3AED')
+
+    if summary['adv']:
+        _panel('ADVANCE / OTHER DEDUCTION SUMMARY', [
+            ('Total Advance / Other Recovery', summary['adv']),
+        ], 'B45309')
+
+    _panel('GRAND TOTALS', [
+        ('Total Gross Earnings', summary['gross']),
+        ('Total Employer Cost (CTC)', summary['ctc']),
+        ('Total Net Payable to Employees', summary['net']),
+    ], '1A237E')
+
+    # Print setup — Legal landscape, fit to width
+    ws.sheet_properties.pageSetUpPr = PageSetupProperties(fitToPage=True)
+    ws.page_setup.orientation = 'landscape'
+    ws.page_setup.paperSize = 5
+    ws.page_setup.fitToWidth = 1
+    ws.page_setup.fitToHeight = 0
+    ws.print_title_rows = f'{grp_row}:{hdr_row}'
+    ws.page_margins = PageMargins(left=0.3, right=0.3, top=0.4, bottom=0.4, header=0.2, footer=0.2)
+
     output = io.BytesIO()
     wb.save(output)
     output.seek(0)

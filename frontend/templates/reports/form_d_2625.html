@@ -108,10 +108,6 @@
                         style="min-width:22px;"
                         title="{{ "%02d"|format(date_list[i][2]) }}/{{ "%02d"|format(date_list[i][1]) }}/{{ date_list[i][0] }}">{{ date_list[i][2] }}</th>
                 {% endfor %}
-                {% if config and config.lop_system_enabled %}
-                <th rowspan="2" style="min-width:45px; background:#fef3c7;">Loss of<br>Pay</th>
-                <th rowspan="2" style="min-width:45px; background:#fef3c7;">Wkd on<br>Wkly<br>Rest</th>
-                {% endif %}
                 <th rowspan="2" style="min-width:55px;">Summary<br>No. Of<br>Days</th>
                 <th rowspan="2" style="min-width:55px;">Remarks<br>No of<br>hours</th>
                 <th rowspan="2" style="min-width:80px;">Signature of<br>Register Keeper</th>
@@ -123,7 +119,7 @@
             </tr>
         </thead>
         <tbody>
-            {% set ns = namespace(t_days=0, t_hours=0, t_lop=0, t_wr=0) %}
+            {% set ns = namespace(t_days=0, t_hours=0) %}
 
             {% for att in attendance %}
             <tr>
@@ -139,17 +135,11 @@
                     </td>
                 {% endfor %}
 
-                {% if config and config.lop_system_enabled %}
-                <td style="background:#fffbeb;">{{ att.lop_days|int if att.lop_days == att.lop_days|int else "%.1f"|format(att.lop_days) }}</td>
-                <td style="background:#fffbeb;">{{ att.wr_days|int if att.wr_days == att.wr_days|int else "%.1f"|format(att.wr_days) }}</td>
-                {% endif %}
                 <td style="font-weight:700;">{{ att.days_present|int if att.days_present == att.days_present|int else "%.2f"|format(att.days_present) }}</td>
                 <td>{{ att.hours }}</td>
                 <td></td>
             </tr>
             {% set ns.t_days = ns.t_days + att.days_present %}
-            {% set ns.t_lop = ns.t_lop + att.lop_days %}
-            {% set ns.t_wr = ns.t_wr + att.wr_days %}
             {% set ns.t_hours = ns.t_hours + att.hours %}
             {% endfor %}
 
@@ -159,10 +149,6 @@
                 {% for i in range(num_cols) %}
                 <td></td>
                 {% endfor %}
-                {% if config and config.lop_system_enabled %}
-                <td style="font-size:0.9rem;">{{ ns.t_lop|int }}</td>
-                <td style="font-size:0.9rem;">{{ ns.t_wr|int }}</td>
-                {% endif %}
                 <td style="font-size:0.9rem;">{{ ns.t_days }}</td>
                 <td style="font-size:0.9rem;">{{ ns.t_hours }}</td>
                 <td></td>

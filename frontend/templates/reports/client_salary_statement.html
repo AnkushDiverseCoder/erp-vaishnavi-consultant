@@ -1,0 +1,219 @@
+{% extends "base.html" %}
+
+{% block title %}Client Salary Statement - {{ payroll.period_display }}{% endblock %}
+{% block page_header %}Client Salary Statement (Internal){% endblock %}
+
+{% block content %}
+{% set print_size = 'legal-landscape' %}
+{% include '_print_common.html' %}
+<style>
+    @media print {
+        html, body { width: 14in; }
+        .page-content { padding: 0 !important; }
+        .cs-page { box-shadow:none !important; border:none !important; margin:0 !important; padding:6px !important; width:100% !important; max-width:100% !important; overflow:visible !important; }
+        .cs-table { width:100% !important; page-break-inside:auto; }
+        .cs-table th, .cs-table td { font-size:7px !important; padding:2px 3px !important; }
+        .cs-table thead { display: table-header-group; }
+        .cs-table tr { page-break-inside: avoid; }
+        .cs-summary { page-break-inside: avoid; }
+    }
+    .cs-page { background:#fff; border:1px solid #e2e8f0; border-radius:8px; padding:18px; margin-bottom:20px; box-shadow:0 1px 3px rgba(0,0,0,.1); overflow-x:auto; }
+    .cs-title { text-align:center; margin-bottom:10px; }
+    .cs-title h3 { font-size:1.05rem; font-weight:800; margin:0; letter-spacing:.5px; }
+    .cs-title h4 { font-size:.9rem; font-weight:700; margin:2px 0; }
+    .cs-title p  { font-size:.78rem; font-weight:600; margin:2px 0; color:#b45309; }
+    .cs-table { width:100%; border-collapse:collapse; font-size:.7rem; }
+    .cs-table th, .cs-table td { border:1px solid #cbd5e1; padding:3px 5px; white-space:nowrap; vertical-align:middle; text-align:center; }
+    .cs-table thead .grp th { color:#fff; font-weight:700; font-size:.66rem; }
+    .cs-table thead .hdr th { color:#fff; font-weight:700; font-size:.66rem; }
+    .g-id   { background:#1E40AF; } .g-rate { background:#7C3AED; } .g-att  { background:#0D9488; }
+    .g-earn { background:#059669; } .g-er   { background:#B45309; } .g-ded  { background:#DC2626; } .g-net { background:#1A237E; }
+    .cs-table td.name { text-align:left; font-weight:600; }
+    .cs-table td.amt  { text-align:right; }
+    .t-earn { background:#e2efda; } .t-er { background:#fde9d3; } .t-ded { background:#fce4e4; } .t-net { background:#d6e4f0; font-weight:700; }
+    .cs-table tr.total-row td { background:#fef3c7; font-weight:700; border-top:2px solid #1e293b; border-bottom:2px solid #1e293b; }
+    .cs-summary { display:flex; flex-wrap:wrap; gap:14px; margin-top:18px; }
+    .cs-card { flex:1 1 240px; border:1px solid #e2e8f0; border-radius:8px; overflow:hidden; min-width:240px; }
+    .cs-card .cs-head { color:#fff; font-weight:700; font-size:.82rem; padding:7px 12px; }
+    .cs-card table { width:100%; border-collapse:collapse; font-size:.8rem; }
+    .cs-card td { padding:5px 12px; border-bottom:1px solid #f1f5f9; }
+    .cs-card td.v { text-align:right; font-weight:600; }
+    .cs-card tr.tot td { font-weight:800; background:#f8fafc; border-top:2px solid #cbd5e1; }
+</style>
+
+<!-- Action Bar -->
+<div class="no-print mb-3 d-flex justify-content-between align-items-center">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb" style="font-size:.85rem; margin:0;">
+            <li class="breadcrumb-item"><a href="{{ url_for('payroll.payroll_list') }}" class="text-decoration-none">Salary Processing</a></li>
+            <li class="breadcrumb-item"><a href="{{ url_for('payroll.payroll_process', payroll_id=payroll.id) }}" class="text-decoration-none">{{ payroll.period_display }}</a></li>
+            <li class="breadcrumb-item active">Client Salary Statement</li>
+        </ol>
+    </nav>
+    <div class="d-flex gap-2">
+        <a href="{{ url_for('reports.client_statement_excel', payroll_id=payroll.id) }}" class="btn btn-success btn-sm">
+            <i class="bi bi-file-earmark-excel me-1"></i> Download Excel
+        </a>
+        <button onclick="window.history.back()" style="background:#e5e7eb; color:#333; border:none; padding:6px 16px; border-radius:6px; cursor:pointer; font-size:.82rem;"><i class="bi bi-arrow-left me-1"></i> Back</button>
+        <button onclick="window.print()" class="btn btn-primary btn-sm"><i class="bi bi-printer me-1"></i> Print / PDF</button>
+    </div>
+</div>
+
+<div class="no-print alert alert-warning py-2 px-3 mb-3" style="font-size:.82rem;">
+    <i class="bi bi-info-circle-fill me-1"></i>
+    <strong>Internal report</strong> — includes employer share &amp; CTC. For printing set <b>Layout = Landscape</b>, <b>Paper = Legal</b>.
+</div>
+
+<div class="cs-page">
+    <div class="cs-title">
+        <h3>{{ est.company_name.upper() }}{% if est.branch_name %} ({{ est.branch_name }}){% endif %}</h3>
+        <h4>CLIENT SALARY STATEMENT — ALL-IN-ONE (INTERNAL)</h4>
+        <p>Salary for the Month of {{ payroll.month_name }} {{ payroll.year }} &nbsp;|&nbsp; Employees: {{ summary.count }}</p>
+    </div>
+
+    <table class="cs-table">
+        <thead>
+            <tr class="grp">
+                <th class="g-id" colspan="5">EMPLOYEE</th>
+                <th class="g-rate">RATE</th>
+                <th class="g-att" colspan="{{ 5 if lop_on else 3 }}">ATTENDANCE</th>
+                <th class="g-earn" colspan="{{ heads|length + 3 }}">EARNINGS</th>
+                <th class="g-er" colspan="3">EMPLOYER SHARE</th>
+                <th class="g-ded" colspan="5">DEDUCTIONS</th>
+                <th class="g-net">NET</th>
+            </tr>
+            <tr class="hdr">
+                <th class="g-id">Sr.</th>
+                <th class="g-id">{{ 'UAN' if config.epf_applicable else 'Code' }}</th>
+                <th class="g-id">ESIC IP</th>
+                <th class="g-id">Employee Name</th>
+                <th class="g-id">Wage Type</th>
+                <th class="g-rate">Rate / Gross</th>
+                <th class="g-att">Month Days</th>
+                {% if lop_on %}
+                <th class="g-att">Loss of Pay</th>
+                <th class="g-att">Wkd Wkly Rest</th>
+                {% endif %}
+                <th class="g-att">{{ 'Total Att. Paid' if lop_on else 'Days Worked' }}</th>
+                <th class="g-att">Paid Hol.</th>
+                <th class="g-att">OT Days</th>
+                {% for h in heads %}<th class="g-earn">{{ h.short_code or h.name }}</th>{% endfor %}
+                <th class="g-earn">OT Amt</th>
+                <th class="g-earn">NPH</th>
+                <th class="g-earn">Gross</th>
+                <th class="g-er">EPF Employer</th>
+                <th class="g-er">ESIC Employer</th>
+                <th class="g-er">CTC (Cost)</th>
+                <th class="g-ded">EPF (EE)</th>
+                <th class="g-ded">ESIC (EE)</th>
+                <th class="g-ded">PT</th>
+                <th class="g-ded">Advance / Other</th>
+                <th class="g-ded">Total Ded.</th>
+                <th class="g-net">Net Payable</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% macro dnum(v) %}{{ v|int if v == v|int else "%.1f"|format(v) }}{% endmacro %}
+            {% for row in rows %}
+            <tr>
+                <td>{{ row.sr }}</td>
+                <td style="font-size:.66rem;">{{ row.code or '—' }}</td>
+                <td style="font-size:.66rem;">{{ row.esic_ip }}</td>
+                <td class="name">{{ row.name }}</td>
+                <td>{{ row.wage_type }}</td>
+                <td class="amt">{{ "{:,.0f}".format(row.rate) }}</td>
+                <td>{{ row.month_days|int }}</td>
+                {% if lop_on %}
+                <td>{{ dnum(row.lop) }}</td>
+                <td>{{ dnum(row.wr) }}</td>
+                {% endif %}
+                <td><b>{{ dnum(row.days) }}</b></td>
+                <td>{{ dnum(row.ph) }}</td>
+                <td>{{ dnum(row.ot_days) }}</td>
+                {% for h in heads %}<td class="amt t-earn">{{ "{:,.0f}".format(row.heads[h.id]) }}</td>{% endfor %}
+                <td class="amt t-earn">{{ "{:,.0f}".format(row.ot_amt) }}</td>
+                <td class="amt t-earn">{{ "{:,.0f}".format(row.nph) }}</td>
+                <td class="amt t-earn"><b>{{ "{:,.0f}".format(row.gross) }}</b></td>
+                <td class="amt t-er">{{ "{:,.0f}".format(row.epf_er) }}</td>
+                <td class="amt t-er">{{ "{:,.0f}".format(row.esic_er) }}</td>
+                <td class="amt t-er"><b>{{ "{:,.0f}".format(row.ctc) }}</b></td>
+                <td class="amt t-ded">{{ "{:,.0f}".format(row.epf_ee) }}</td>
+                <td class="amt t-ded">{{ "{:,.0f}".format(row.esic_ee) }}</td>
+                <td class="amt t-ded">{{ "{:,.0f}".format(row.pt) }}</td>
+                <td class="amt t-ded">{{ "{:,.0f}".format(row.adv) }}</td>
+                <td class="amt t-ded">{{ "{:,.0f}".format(row.total_ded) }}</td>
+                <td class="amt t-net">{{ "{:,.0f}".format(row.net) }}</td>
+            </tr>
+            {% endfor %}
+            <tr class="total-row">
+                <td colspan="{{ 6 if lop_on else 6 }}" style="text-align:center;">TOTAL ({{ summary.count }} Employees)</td>
+                {% if lop_on %}<td></td><td></td>{% endif %}
+                <td></td><td></td><td></td>
+                {% for h in heads %}<td class="amt">{{ "{:,.0f}".format(summary.head_totals.get(h.id, 0)) }}</td>{% endfor %}
+                <td class="amt">{{ "{:,.0f}".format(summary.ot_amt) }}</td>
+                <td class="amt">{{ "{:,.0f}".format(summary.nph) }}</td>
+                <td class="amt">{{ "{:,.0f}".format(summary.gross) }}</td>
+                <td class="amt">{{ "{:,.0f}".format(summary.epf_er) }}</td>
+                <td class="amt">{{ "{:,.0f}".format(summary.esic_er) }}</td>
+                <td class="amt">{{ "{:,.0f}".format(summary.ctc) }}</td>
+                <td class="amt">{{ "{:,.0f}".format(summary.epf_ee) }}</td>
+                <td class="amt">{{ "{:,.0f}".format(summary.esic_ee) }}</td>
+                <td class="amt">{{ "{:,.0f}".format(summary.pt) }}</td>
+                <td class="amt">{{ "{:,.0f}".format(summary.adv) }}</td>
+                <td class="amt">{{ "{:,.0f}".format(summary.total_ded) }}</td>
+                <td class="amt">{{ "{:,.0f}".format(summary.net) }}</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <!-- Payable Summary Panels -->
+    <div class="cs-summary">
+        <div class="cs-card">
+            <div class="cs-head" style="background:#1E40AF;">EPF Payable Summary</div>
+            <table>
+                <tr><td>Employee Share (A/c 1 — 12%)</td><td class="v">{{ "{:,.0f}".format(summary.epf_ee) }}</td></tr>
+                <tr><td>Employer EPF (A/c 1 — 3.67%)</td><td class="v">{{ "{:,.0f}".format(summary.epf_ac01) }}</td></tr>
+                <tr><td>Employer EPS (A/c 10 — 8.33%)</td><td class="v">{{ "{:,.0f}".format(summary.epf_eps) }}</td></tr>
+                <tr><td>EDLI (A/c 21 — 0.50%)</td><td class="v">{{ "{:,.0f}".format(summary.epf_edli) }}</td></tr>
+                <tr><td>Admin Charges (A/c 2 — 0.50%)</td><td class="v">{{ "{:,.0f}".format(summary.epf_admin) }}</td></tr>
+                <tr class="tot"><td>Total EPF Challan</td><td class="v">{{ "{:,.0f}".format(summary.epf_challan) }}</td></tr>
+            </table>
+        </div>
+        <div class="cs-card">
+            <div class="cs-head" style="background:#0D9488;">ESIC Payable Summary</div>
+            <table>
+                <tr><td>Employee Share (0.75%)</td><td class="v">{{ "{:,.0f}".format(summary.esic_ee) }}</td></tr>
+                <tr><td>Employer Share (3.25%)</td><td class="v">{{ "{:,.0f}".format(summary.esic_er) }}</td></tr>
+                <tr class="tot"><td>Total ESIC Challan</td><td class="v">{{ "{:,.0f}".format(summary.esic_challan) }}</td></tr>
+            </table>
+        </div>
+        <div class="cs-card">
+            <div class="cs-head" style="background:#7C3AED;">PT Payable Summary</div>
+            <table>
+                <tr><td>Total Professional Tax</td><td class="v">{{ "{:,.0f}".format(summary.pt) }}</td></tr>
+            </table>
+        </div>
+        {% if summary.adv %}
+        <div class="cs-card">
+            <div class="cs-head" style="background:#B45309;">Advance / Other Deduction</div>
+            <table>
+                <tr><td>Total Advance / Other Recovery</td><td class="v">{{ "{:,.0f}".format(summary.adv) }}</td></tr>
+            </table>
+        </div>
+        {% endif %}
+        <div class="cs-card">
+            <div class="cs-head" style="background:#1A237E;">Grand Totals</div>
+            <table>
+                <tr><td>Total Gross Earnings</td><td class="v">{{ "{:,.0f}".format(summary.gross) }}</td></tr>
+                <tr><td>Total Employer Cost (CTC)</td><td class="v">{{ "{:,.0f}".format(summary.ctc) }}</td></tr>
+                <tr class="tot"><td>Total Net Payable</td><td class="v">{{ "{:,.0f}".format(summary.net) }}</td></tr>
+            </table>
+        </div>
+    </div>
+
+    <div style="margin-top:16px; display:flex; justify-content:space-between; font-size:.68rem; color:#94a3b8;">
+        <div>Generated: {{ generated_on }}</div>
+        <div>Vaishnavi Consultant — Internal Statement</div>
+    </div>
+</div>
+{% endblock %}

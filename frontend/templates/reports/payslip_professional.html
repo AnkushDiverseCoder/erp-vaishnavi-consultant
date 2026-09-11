@@ -247,12 +247,6 @@
                 <span class="lbl">Days</span>
                 <span class="val">{{ slip.entry.days_present|int if slip.entry.days_present == slip.entry.days_present|int else "%.2f"|format(slip.entry.days_present) }} wrk | {{ slip.entry.total_payable_days|int if slip.entry.total_payable_days == slip.entry.total_payable_days|int else slip.entry.total_payable_days }} pay{% if slip.entry.ot_hours %} | {{ slip.entry.ot_hours|int if slip.entry.ot_hours == slip.entry.ot_hours|int else "%.2f"|format(slip.entry.ot_hours) }} OT{% endif %}</span>
             </div>
-            {% if config and config.lop_system_enabled %}
-            <div class="info-item">
-                <span class="lbl">LOP / Wkly Rest</span>
-                <span class="val">{{ slip.lop_days|int if slip.lop_days == slip.lop_days|int else "%.1f"|format(slip.lop_days) }} LOP | {{ slip.wr_days|int if slip.wr_days == slip.wr_days|int else "%.1f"|format(slip.wr_days) }} wkly-rest</span>
-            </div>
-            {% endif %}
         </div>
 
         <!-- Earnings & Deductions -->

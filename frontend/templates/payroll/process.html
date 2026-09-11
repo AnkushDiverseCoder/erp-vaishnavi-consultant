@@ -373,6 +373,9 @@
                 </button>
                 <ul class="dropdown-menu">
                     <li><a class="dropdown-item" href="{{ url_for('payroll.payroll_statement', payroll_id=payroll.id) }}"><i class="bi bi-file-text me-2"></i>Monthly Statement to Client</a></li>
+                    <li><a class="dropdown-item fw-bold text-primary" href="{{ url_for('reports.client_statement_view', payroll_id=payroll.id) }}" target="_blank"><i class="bi bi-stars me-2"></i>Client Salary Statement (All-in-One)</a></li>
+                    <li><a class="dropdown-item" href="{{ url_for('reports.client_statement_excel', payroll_id=payroll.id) }}"><i class="bi bi-file-earmark-excel me-2"></i>Client Salary Statement — Excel</a></li>
+                    <li><hr class="dropdown-divider"></li>
                     <li><a class="dropdown-item" href="{{ url_for('reports.statement_format2', payroll_id=payroll.id) }}"><i class="bi bi-file-richtext me-2"></i>Salary Register (Format 2)</a></li>
                     <li><a class="dropdown-item" href="{{ url_for('reports.statement_format3', payroll_id=payroll.id) }}"><i class="bi bi-file-bar-graph me-2"></i>Salary Register (Format 3)</a></li>
                 </ul>
