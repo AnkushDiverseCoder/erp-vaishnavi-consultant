@@ -76,7 +76,7 @@
             <tr class="grp">
                 <th class="g-id" colspan="5">EMPLOYEE</th>
                 <th class="g-rate">RATE</th>
-                <th class="g-att" colspan="{{ 5 if lop_on else 3 }}">ATTENDANCE</th>
+                <th class="g-att" colspan="{{ 6 if lop_on else 4 }}">ATTENDANCE</th>
                 <th class="g-earn" colspan="{{ heads|length + 3 }}">EARNINGS</th>
                 <th class="g-ded" colspan="5">DEDUCTIONS</th>
                 <th class="g-net">NET</th>
@@ -146,9 +146,9 @@
             </tr>
             {% endfor %}
             <tr class="total-row">
-                <td colspan="{{ 6 if lop_on else 6 }}" style="text-align:center;">TOTAL ({{ summary.count }} Employees)</td>
-                {% if lop_on %}<td></td><td></td>{% endif %}
-                <td></td><td></td><td></td>
+                <td colspan="6" style="text-align:center;">TOTAL ({{ summary.count }} Employees)</td>
+                {# ATTENDANCE placeholders: Month Days, [LOP, Wkd Wkly Rest], Days/Total, Paid Hol., OT Days #}
+                <td></td>{% if lop_on %}<td></td><td></td>{% endif %}<td></td><td></td><td></td>
                 {% for h in heads %}<td class="amt">{{ "{:,.0f}".format(summary.head_totals.get(h.id, 0)) }}</td>{% endfor %}
                 <td class="amt">{{ "{:,.0f}".format(summary.ot_amt) }}</td>
                 <td class="amt">{{ "{:,.0f}".format(summary.nph) }}</td>
