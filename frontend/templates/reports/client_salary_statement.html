@@ -78,9 +78,9 @@
                 <th class="g-rate">RATE</th>
                 <th class="g-att" colspan="{{ 5 if lop_on else 3 }}">ATTENDANCE</th>
                 <th class="g-earn" colspan="{{ heads|length + 3 }}">EARNINGS</th>
-                <th class="g-er" colspan="3">EMPLOYER SHARE</th>
                 <th class="g-ded" colspan="5">DEDUCTIONS</th>
                 <th class="g-net">NET</th>
+                <th class="g-er" colspan="3">EMPLOYER SHARE</th>
             </tr>
             <tr class="hdr">
                 <th class="g-id">Sr.</th>
@@ -101,15 +101,15 @@
                 <th class="g-earn">OT Amt</th>
                 <th class="g-earn">NPH</th>
                 <th class="g-earn">Gross</th>
-                <th class="g-er">EPF Employer</th>
-                <th class="g-er">ESIC Employer</th>
-                <th class="g-er">CTC (Cost)</th>
                 <th class="g-ded">EPF (EE)</th>
                 <th class="g-ded">ESIC (EE)</th>
                 <th class="g-ded">PT</th>
                 <th class="g-ded">Advance / Other</th>
                 <th class="g-ded">Total Ded.</th>
                 <th class="g-net">Net Payable</th>
+                <th class="g-er">EPF Employer</th>
+                <th class="g-er">ESIC Employer</th>
+                <th class="g-er">CTC (Cost)</th>
             </tr>
         </thead>
         <tbody>
@@ -134,15 +134,15 @@
                 <td class="amt t-earn">{{ "{:,.0f}".format(row.ot_amt) }}</td>
                 <td class="amt t-earn">{{ "{:,.0f}".format(row.nph) }}</td>
                 <td class="amt t-earn"><b>{{ "{:,.0f}".format(row.gross) }}</b></td>
-                <td class="amt t-er">{{ "{:,.0f}".format(row.epf_er) }}</td>
-                <td class="amt t-er">{{ "{:,.0f}".format(row.esic_er) }}</td>
-                <td class="amt t-er"><b>{{ "{:,.0f}".format(row.ctc) }}</b></td>
                 <td class="amt t-ded">{{ "{:,.0f}".format(row.epf_ee) }}</td>
                 <td class="amt t-ded">{{ "{:,.0f}".format(row.esic_ee) }}</td>
                 <td class="amt t-ded">{{ "{:,.0f}".format(row.pt) }}</td>
                 <td class="amt t-ded">{{ "{:,.0f}".format(row.adv) }}</td>
                 <td class="amt t-ded">{{ "{:,.0f}".format(row.total_ded) }}</td>
                 <td class="amt t-net">{{ "{:,.0f}".format(row.net) }}</td>
+                <td class="amt t-er">{{ "{:,.0f}".format(row.epf_er) }}</td>
+                <td class="amt t-er">{{ "{:,.0f}".format(row.esic_er) }}</td>
+                <td class="amt t-er"><b>{{ "{:,.0f}".format(row.ctc) }}</b></td>
             </tr>
             {% endfor %}
             <tr class="total-row">
@@ -153,15 +153,15 @@
                 <td class="amt">{{ "{:,.0f}".format(summary.ot_amt) }}</td>
                 <td class="amt">{{ "{:,.0f}".format(summary.nph) }}</td>
                 <td class="amt">{{ "{:,.0f}".format(summary.gross) }}</td>
-                <td class="amt">{{ "{:,.0f}".format(summary.epf_er) }}</td>
-                <td class="amt">{{ "{:,.0f}".format(summary.esic_er) }}</td>
-                <td class="amt">{{ "{:,.0f}".format(summary.ctc) }}</td>
                 <td class="amt">{{ "{:,.0f}".format(summary.epf_ee) }}</td>
                 <td class="amt">{{ "{:,.0f}".format(summary.esic_ee) }}</td>
                 <td class="amt">{{ "{:,.0f}".format(summary.pt) }}</td>
                 <td class="amt">{{ "{:,.0f}".format(summary.adv) }}</td>
                 <td class="amt">{{ "{:,.0f}".format(summary.total_ded) }}</td>
                 <td class="amt">{{ "{:,.0f}".format(summary.net) }}</td>
+                <td class="amt">{{ "{:,.0f}".format(summary.epf_er) }}</td>
+                <td class="amt">{{ "{:,.0f}".format(summary.esic_er) }}</td>
+                <td class="amt">{{ "{:,.0f}".format(summary.ctc) }}</td>
             </tr>
         </tbody>
     </table>

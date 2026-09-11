@@ -3047,12 +3047,13 @@ def _generate_client_statement_excel(payroll, est, config, heads, rows, summary,
     cols += [
         ('ot_amt', 'OT\nAmt', 10, 'earn', True), ('nph', 'NPH', 9, 'earn', True),
         ('gross', 'Gross\nEarnings', 13, 'earn', True),
-        ('epf_er', 'EPF\nEmployer', 11, 'er', True), ('esic_er', 'ESIC\nEmployer', 11, 'er', True),
-        ('ctc', 'CTC\n(Cost)', 12, 'er', True),
         ('epf_ee', 'EPF\n(EE)', 9, 'ded', True), ('esic_ee', 'ESIC\n(EE)', 9, 'ded', True),
         ('pt', 'PT', 7, 'ded', True), ('adv', 'Advance /\nOther', 11, 'ded', True),
         ('total_ded', 'Total\nDed.', 11, 'ded', True),
         ('net', 'Net\nPayable', 13, 'net', True),
+        # Employer share sits LAST — after Net Pay (owner's layout)
+        ('epf_er', 'EPF\nEmployer', 11, 'er', True), ('esic_er', 'ESIC\nEmployer', 11, 'er', True),
+        ('ctc', 'CTC\n(Cost)', 12, 'er', True),
     ]
 
     ncol = len(cols)
