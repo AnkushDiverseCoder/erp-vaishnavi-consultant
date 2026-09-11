@@ -853,6 +853,10 @@ def _auto_migrate_columns(db):
         "ALTER TABLE payroll_configs ADD COLUMN IF NOT EXISTS shift_in_time VARCHAR(5) DEFAULT '09:00'",
         "ALTER TABLE payroll_configs ADD COLUMN IF NOT EXISTS shift_out_time VARCHAR(5) DEFAULT '18:00'",
         "ALTER TABLE payroll_configs ADD COLUMN IF NOT EXISTS wage_payment_day INTEGER",
+        # Manual "Loss of Pay" system (per-establishment toggle + two manual day counts)
+        "ALTER TABLE payroll_configs ADD COLUMN IF NOT EXISTS lop_system_enabled BOOLEAN DEFAULT FALSE",
+        "ALTER TABLE payroll_entries ADD COLUMN IF NOT EXISTS lop_days DOUBLE PRECISION DEFAULT 0",
+        "ALTER TABLE payroll_entries ADD COLUMN IF NOT EXISTS weekly_rest_worked_days DOUBLE PRECISION DEFAULT 0",
     ]:
         try:
             db.session.execute(db.text(ddl))

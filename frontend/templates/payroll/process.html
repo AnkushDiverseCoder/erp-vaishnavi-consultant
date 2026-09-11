@@ -585,6 +585,10 @@
                         <th style="white-space:nowrap; width:65px;">Gross</th>
                         <th style="white-space:nowrap; width:55px;" title="Days Present">Pres.</th>
                         <th style="white-space:nowrap; width:55px;" title="Days Absent">Abs.</th>
+                        {% if config.lop_system_enabled %}
+                        <th style="white-space:nowrap; width:60px; background:#fef3c7;" title="Loss of Pay (Days) — absent days entered manually">LOP</th>
+                        <th style="white-space:nowrap; width:60px; background:#fef3c7;" title="Worked on Weekly Rest (Days) — extra days worked on a weekly-off">Wkly Rest</th>
+                        {% endif %}
                         {% if config.paid_holiday_type == 'separate' %}
                         <th style="white-space:nowrap; width:50px;" title="Paid Holidays">PH</th>
                         {% endif %}
@@ -639,6 +643,20 @@
                                 {{ entry.days_absent|int }}
                             </span>
                         </td>
+                        {% if config.lop_system_enabled %}
+                        <td>
+                            <input type="number" name="lop_{{ entry.employee_id }}" class="form-control form-control-sm"
+                                   value="{{ entry.lop_days or 0 }}" step="any" min="0"
+                                   style="width:60px; font-size:0.8rem; padding:2px 4px; text-align:center; background:#fffbeb;"
+                                   {% if payroll.status == 'finalized' %}disabled{% endif %}>
+                        </td>
+                        <td>
+                            <input type="number" name="wr_{{ entry.employee_id }}" class="form-control form-control-sm"
+                                   value="{{ entry.weekly_rest_worked_days or 0 }}" step="any" min="0"
+                                   style="width:60px; font-size:0.8rem; padding:2px 4px; text-align:center; background:#fffbeb;"
+                                   {% if payroll.status == 'finalized' %}disabled{% endif %}>
+                        </td>
+                        {% endif %}
                         {% if config.paid_holiday_type == 'separate' %}
                         <td>
                             <input type="number" name="ph_{{ entry.employee_id }}" class="form-control form-control-sm"

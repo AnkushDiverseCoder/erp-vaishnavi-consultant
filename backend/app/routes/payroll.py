@@ -65,6 +65,9 @@ def payroll_config(est_id):
         _lopd = request.form.get('lop_divisor', 'calendar')
         config.lop_divisor = _lopd if _lopd in ('calendar', '26', '30') else 'calendar'
 
+        # Manual "Loss of Pay" system (two manual day counts across all reports/templates)
+        config.lop_system_enabled = ('lop_system_enabled' in request.form)
+
         # Billing cycle start day (1 = standard, >1 = custom cycle)
         try:
             _cycle_day = int(request.form.get('billing_cycle_start_day', 1))
@@ -1820,6 +1823,10 @@ def save_attendance(payroll_id):
     # by re-expressing the existing prorate as: divisor = _lop_div, payable =
     # _lop_div − absent. Default OFF → nothing changes for existing setups.
     _full_salary_mode = getattr(config, 'monthly_full_salary', False)
+    # Manual Loss-of-Pay system: the user types LOP (absent) and Weekly-Rest-Worked
+    # day counts; payable = _lop_div − LOP + WR. Applies to monthly/gross employees
+    # only (daily-wages use days_present). Default OFF → unchanged for everyone.
+    _lop_system = getattr(config, 'lop_system_enabled', False)
     _lop_basis = getattr(config, 'lop_divisor', 'calendar') or 'calendar'
     if _lop_basis == 'calendar':
         _lop_div = num_days_in_month
@@ -1854,6 +1861,19 @@ def save_attendance(payroll_id):
         after_rest = remaining - rest_day_count
         after_holidays = after_rest - holiday_count
         entry.days_absent = max(0, after_holidays)
+
+        # --- Manual Loss-of-Pay day counts (only when the system is enabled) ---
+        # These are typed by the user on the process page / Universal Template.
+        # They drive the payable days for monthly (gross) employees below.
+        if _lop_system:
+            try:
+                entry.lop_days = max(0, float(request.form.get(f'lop_{emp_id}', entry.lop_days or 0) or 0))
+            except (ValueError, TypeError):
+                entry.lop_days = 0
+            try:
+                entry.weekly_rest_worked_days = max(0, float(request.form.get(f'wr_{emp_id}', entry.weekly_rest_worked_days or 0) or 0))
+            except (ValueError, TypeError):
+                entry.weekly_rest_worked_days = 0
 
         # Divisor used by the monthly salary/head proration below. Defaults to
         # the establishment's working_days; overridden to the LOP divisor for
@@ -1942,7 +1962,16 @@ def save_attendance(payroll_id):
                 full_gross = round(_per_day_total * working_days) if working_days > 0 else entry.earned_gross
             elif _ovr_gross:
                 full_gross = _ovr_gross
-                if _full_salary_mode:
+                if _lop_system:
+                    # Manual Loss-of-Pay: payable = _lop_div − LOP + Weekly-Rest-Worked.
+                    # Absent days come from the typed LOP count (not the smart formula),
+                    # and days_present is set to the paid attendance so reports and the
+                    # zero-net guard stay consistent.
+                    _pay_divisor = _lop_div
+                    entry.total_payable_days = max(0, _lop_div - (entry.lop_days or 0) + (entry.weekly_rest_worked_days or 0))
+                    entry.days_absent = entry.lop_days or 0
+                    entry.days_present = entry.total_payable_days
+                elif _full_salary_mode:
                     # Full salary; deduct only absent days at gross ÷ _lop_div.
                     _pay_divisor = _lop_div
                     entry.total_payable_days = max(0, _lop_div - entry.days_absent)
@@ -2138,7 +2167,13 @@ def save_attendance(payroll_id):
             if is_daily_wages and _eff_daily_rate:
                 entry.earned_gross = round(_eff_daily_rate * entry.total_payable_days)
             elif emp_absence_deduction and working_days > 0:
-                if _full_salary_mode and not is_daily_wages:
+                if _lop_system and not is_daily_wages:
+                    # Manual Loss-of-Pay: payable = _lop_div − LOP + Weekly-Rest-Worked.
+                    _pay_divisor = _lop_div
+                    entry.total_payable_days = max(0, _lop_div - (entry.lop_days or 0) + (entry.weekly_rest_worked_days or 0))
+                    entry.days_absent = entry.lop_days or 0
+                    entry.days_present = entry.total_payable_days
+                elif _full_salary_mode and not is_daily_wages:
                     # Full monthly salary; deduct only absent days at
                     # gross ÷ _lop_div. Re-expressed as prorate so the head
                     # breakdown below stays consistent.
@@ -3442,6 +3477,8 @@ def upload_attendance(payroll_id):
         remark_col = col_map_from_file.get('remark')
         rate_col = col_map_from_file.get('rate')  # For daily_wages / gross_only
         bonus_col = col_map_from_file.get('bonus')  # Monthly bonus override (optional)
+        lop_col = col_map_from_file.get('lop_days')  # Manual Loss-of-Pay days (optional)
+        wr_col = col_map_from_file.get('wr_days')    # Worked-on-weekly-rest days (optional)
         data_start_row = 6  # Row 4=group, Row 5=header, Row 6=data
     else:
         # Monthly template: Col 1=Sr, 2=EmpID, 3=Name, 4=Gross, 5=Present
@@ -3454,6 +3491,8 @@ def upload_attendance(payroll_id):
         ot_col = None
         rate_col = None
         bonus_col = None
+        lop_col = None
+        wr_col = None
         if has_ph:
             ph_col = next_col
             next_col += 1
@@ -3629,6 +3668,18 @@ def upload_attendance(payroll_id):
             except (ValueError, TypeError, IndexError):
                 remark = ''
 
+        # ── Manual Loss-of-Pay day counts (universal template, when present) ──
+        if lop_col:
+            try:
+                entry.lop_days = max(0, float(row[lop_col - 1].value or 0))
+            except (ValueError, TypeError):
+                entry.lop_days = 0
+        if wr_col:
+            try:
+                entry.weekly_rest_worked_days = max(0, float(row[wr_col - 1].value or 0))
+            except (ValueError, TypeError):
+                entry.weekly_rest_worked_days = 0
+
         # Update attendance on entry
         entry.days_present = days_present
         entry.ot_hours = ot_value
@@ -3767,6 +3818,8 @@ def upload_attendance(payroll_id):
                 entry.days_present = 0
                 entry.ot_hours = 0
                 entry.paid_holidays = 0
+                entry.lop_days = 0
+                entry.weekly_rest_worked_days = 0
                 entry.rate_overrides = None
                 zero_count += 1
 
@@ -3989,6 +4042,11 @@ def download_universal_template(payroll_id):
 
     # ── Attendance Columns ──
     col_map['days_present'] = (col_idx, 'Days Present', 'attend', 13); col_idx += 1
+    # Manual Loss-of-Pay day counts (only when the system is enabled for this estt.)
+    has_lop_system = bool(getattr(config, 'lop_system_enabled', False))
+    if has_lop_system:
+        col_map['lop_days'] = (col_idx, 'Loss of Pay (Days)', 'attend', 15); col_idx += 1
+        col_map['wr_days'] = (col_idx, 'Worked Weekly Rest (Days)', 'attend', 16); col_idx += 1
     if has_ph:
         col_map['nph'] = (col_idx, 'NPH', 'attend', 8); col_idx += 1
     if has_ot:
@@ -4132,6 +4190,17 @@ def download_universal_template(payroll_id):
         dp_cell.font = data_font; dp_cell.fill = input_fill; dp_cell.border = thin_border
         dp_cell.alignment = Alignment(horizontal='center')
 
+        # Manual Loss-of-Pay day counts (pre-fill with stored values, default 0)
+        if has_lop_system and 'lop_days' in col_map:
+            lop_cell = ws.cell(row=row, column=col_map['lop_days'][0],
+                               value=(round(entry.lop_days) if getattr(entry, 'lop_days', 0) else 0))
+            lop_cell.font = data_font; lop_cell.fill = input_fill; lop_cell.border = thin_border
+            lop_cell.alignment = Alignment(horizontal='center')
+            wr_cell = ws.cell(row=row, column=col_map['wr_days'][0],
+                              value=(round(entry.weekly_rest_worked_days) if getattr(entry, 'weekly_rest_worked_days', 0) else 0))
+            wr_cell.font = data_font; wr_cell.fill = input_fill; wr_cell.border = thin_border
+            wr_cell.alignment = Alignment(horizontal='center')
+
         if has_ph and 'nph' in col_map:
             ph_cell = ws.cell(row=row, column=col_map['nph'][0], value='')
             ph_cell.font = data_font; ph_cell.fill = input_fill; ph_cell.border = thin_border
@@ -4209,6 +4278,11 @@ def download_universal_template(payroll_id):
         ['', '  → Days Present BLANK or 0 = employee absent full month (0 salary).'],
         ['', '  → NPH = National/Paid Holidays (if applicable).'],
         ['', '  → OT = Overtime hours or days.'],
+    ] + ([
+        ['', '  → Loss of Pay (Days) = absent days; REDUCES the paid days. Salary = Gross ÷ month-days × (month-days − LOP + Weekly-Rest-Worked).'],
+        ['', '  → Worked Weekly Rest (Days) = extra days worked on a weekly-off; ADDS to the paid days.'],
+        ['', '  → Leave both 0 when not applicable.'],
+    ] if has_lop_system else []) + [
         ['', ''],
         ['', 'YELLOW columns (Deductions) — Optional.'],
         ['', '  → Other Ded. = Advance recovery, Loan EMI, Canteen, etc.'],

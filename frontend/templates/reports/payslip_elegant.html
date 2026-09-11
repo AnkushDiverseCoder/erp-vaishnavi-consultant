@@ -428,6 +428,16 @@
                 <div class="s-label">Payable Days</div>
                 <div class="s-val">{{ slip.entry.total_payable_days|int if slip.entry.total_payable_days == slip.entry.total_payable_days|int else slip.entry.total_payable_days }}</div>
             </div>
+            {% if config and config.lop_system_enabled %}
+            <div class="stat-card">
+                <div class="s-label">Loss of Pay (Days)</div>
+                <div class="s-val">{{ slip.lop_days|int if slip.lop_days == slip.lop_days|int else "%.1f"|format(slip.lop_days) }}</div>
+            </div>
+            <div class="stat-card">
+                <div class="s-label">Worked on Weekly Rest</div>
+                <div class="s-val">{{ slip.wr_days|int if slip.wr_days == slip.wr_days|int else "%.1f"|format(slip.wr_days) }}</div>
+            </div>
+            {% endif %}
         </div>
 
         <div class="stamp">This is a computer-generated payslip and does not require a signature.</div>

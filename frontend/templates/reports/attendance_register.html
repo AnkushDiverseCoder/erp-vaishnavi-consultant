@@ -71,13 +71,18 @@
                 <th class="day-cell {% if d in rest_days %}rest-header{% elif d in holiday_days %}holiday-header{% endif %}">{{ d }}</th>
                 {% endfor %}
                 <th class="summary-col">Pres</th>
+                {% if config and config.lop_system_enabled %}
+                <th class="summary-col" style="background:#fef3c7;">LOP</th>
+                <th class="summary-col" style="background:#fef3c7;">Wkly Rest</th>
+                {% else %}
                 <th class="summary-col">Abs</th>
+                {% endif %}
                 <th class="summary-col">PH</th>
                 <th class="summary-col">Total</th>
             </tr>
         </thead>
         <tbody>
-            {% set ns = namespace(t_pres=0, t_abs=0, t_ph=0, t_total=0) %}
+            {% set ns = namespace(t_pres=0, t_abs=0, t_ph=0, t_total=0, t_lop=0, t_wr=0) %}
 
             {% for att in attendance %}
             <tr>
@@ -93,12 +98,19 @@
                 {% endfor %}
 
                 <td class="summary-col">{{ att.days_present|int if att.days_present == att.days_present|int else "%.2f"|format(att.days_present) }}</td>
+                {% if config and config.lop_system_enabled %}
+                <td class="summary-col" style="background:#fffbeb;">{{ att.lop_days|int if att.lop_days == att.lop_days|int else "%.1f"|format(att.lop_days) }}</td>
+                <td class="summary-col" style="background:#fffbeb;">{{ att.wr_days|int if att.wr_days == att.wr_days|int else "%.1f"|format(att.wr_days) }}</td>
+                {% else %}
                 <td class="summary-col">{{ att.days_absent|int if att.days_absent == att.days_absent|int else "%.2f"|format(att.days_absent) }}</td>
+                {% endif %}
                 <td class="summary-col">{{ att.paid_holidays|int if att.paid_holidays == att.paid_holidays|int else "%.2f"|format(att.paid_holidays) }}</td>
                 <td class="summary-col" style="font-weight:700;">{{ att.total_days|int if att.total_days == att.total_days|int else "%.2f"|format(att.total_days) }}</td>
             </tr>
             {% set ns.t_pres = ns.t_pres + att.days_present %}
             {% set ns.t_abs = ns.t_abs + att.days_absent %}
+            {% set ns.t_lop = ns.t_lop + att.lop_days %}
+            {% set ns.t_wr = ns.t_wr + att.wr_days %}
             {% set ns.t_ph = ns.t_ph + att.paid_holidays %}
             {% set ns.t_total = ns.t_total + att.total_days %}
             {% endfor %}
@@ -109,7 +121,12 @@
                 <td></td>
                 {% endfor %}
                 <td class="summary-col">{{ ns.t_pres }}</td>
+                {% if config and config.lop_system_enabled %}
+                <td class="summary-col">{{ ns.t_lop|int }}</td>
+                <td class="summary-col">{{ ns.t_wr|int }}</td>
+                {% else %}
                 <td class="summary-col">{{ ns.t_abs }}</td>
+                {% endif %}
                 <td class="summary-col">{{ ns.t_ph }}</td>
                 <td class="summary-col" style="font-weight:700;">{{ ns.t_total }}</td>
             </tr>

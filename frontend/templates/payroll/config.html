@@ -156,6 +156,32 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Manual "Loss of Pay" system -->
+            <div class="mt-3 p-3" style="background:#fef3c7; border:1px solid #fcd34d; border-radius:10px;">
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" role="switch"
+                           name="lop_system_enabled" id="lopSystemEnabled"
+                           {% if config and config.lop_system_enabled %}checked{% endif %}>
+                    <label class="form-check-label fw-600" for="lopSystemEnabled" style="font-weight:600;">
+                        Enable <strong>Loss of Pay system</strong> (manual day entry)
+                        <span class="badge bg-warning text-dark" style="font-size:0.6rem;">Selected clients only</span>
+                    </label>
+                </div>
+                <div class="text-muted" style="font-size:0.76rem; margin-top:6px;">
+                    ON: two <strong>manually-entered</strong> day columns appear everywhere — on the Payroll Processing
+                    page, the Universal Upload Template, Form B, the Attendance / Form D registers and the wage slips:
+                    <ul style="margin:6px 0 0 0; padding-left:18px;">
+                        <li><strong>Loss of Pay (Days)</strong> — absent days, <em>reduce</em> the payable days.</li>
+                        <li><strong>Worked on Weekly Rest (Days)</strong> — extra days worked on a weekly-off, <em>add</em> to the payable days.</li>
+                    </ul>
+                    <div style="margin-top:6px;">
+                        Total Attendance Paid = <em>Month Days − Loss of Pay + Weekly-Rest-Worked</em>, and salary is
+                        pro-rated on that (Gross ÷ the divisor above × payable days). OFF (default): behaves exactly as
+                        before — nothing changes for existing establishments.
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!-- Compliance Basis -->

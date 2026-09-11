@@ -570,6 +570,8 @@ def _build_attendance_data(payroll, config, entries, include_zero=False):
             'days_absent': entry.days_absent,
             'paid_holidays': entry.paid_holidays,
             'total_days': entry.total_payable_days,
+            'lop_days': getattr(entry, 'lop_days', 0) or 0,
+            'wr_days': getattr(entry, 'weekly_rest_worked_days', 0) or 0,
             'hours': hours,
         })
 
@@ -698,6 +700,8 @@ def _build_attendance_data_2625(payroll, config, entries, include_zero=False):
             'days_absent': entry.days_absent,
             'paid_holidays': entry.paid_holidays,
             'total_days': entry.total_payable_days,
+            'lop_days': getattr(entry, 'lop_days', 0) or 0,
+            'wr_days': getattr(entry, 'weekly_rest_worked_days', 0) or 0,
             'hours': hours,
         })
 
@@ -1490,10 +1494,18 @@ def _generate_form_d_excel(payroll, est, config, attendance, num_days, rest_days
     holiday_fill = PatternFill(start_color='C8E6C9', end_color='C8E6C9', fill_type='solid')
 
     # Title area
-    # Columns: A=Sl, B=Name, C=Relay, D=Place, E..E+num_days-1=Days, then Summary, Remarks, Signature
+    # Columns: A=Sl, B=Name, C=Relay, D=Place, E..E+num_days-1=Days,
+    #   [Loss of Pay, Worked Weekly Rest — when LOP system on], Summary, Remarks, Signature
+    _lop_on = bool(getattr(config, 'lop_system_enabled', False))
     day_start_col = 5  # Column E
     last_day_col = day_start_col + num_days - 1
-    summary_col = last_day_col + 1
+    if _lop_on:
+        lop_col = last_day_col + 1
+        wr_col = last_day_col + 2
+        summary_col = last_day_col + 3
+    else:
+        lop_col = wr_col = None
+        summary_col = last_day_col + 1
     remarks_col = summary_col + 1
     sig_col = remarks_col + 1
     last_col_letter = get_column_letter(sig_col)
@@ -1538,6 +1550,9 @@ def _generate_form_d_excel(payroll, est, config, attendance, num_days, rest_days
         col = get_column_letter(day_start_col + d)
         ws.column_dimensions[col].width = 4
 
+    if _lop_on:
+        ws.column_dimensions[get_column_letter(lop_col)].width = 8
+        ws.column_dimensions[get_column_letter(wr_col)].width = 8
     ws.column_dimensions[get_column_letter(summary_col)].width = 9
     ws.column_dimensions[get_column_letter(remarks_col)].width = 9
     ws.column_dimensions[get_column_letter(sig_col)].width = 14
@@ -1583,6 +1598,18 @@ def _generate_form_d_excel(payroll, est, config, attendance, num_days, rest_days
         else:
             cell.fill = header_fill
 
+    # Loss-of-Pay / Worked-on-Weekly-Rest headers (LOP system only)
+    if _lop_on:
+        for _c, _lbl in ((lop_col, 'Loss of\nPay'), (wr_col, 'Wkd on\nWkly Rest')):
+            _cl = get_column_letter(_c)
+            ws.merge_cells(f'{_cl}{header_row}:{_cl}{header_row + 1}')
+            _hc = ws[f'{_cl}{header_row}']
+            _hc.value = _lbl
+            _hc.font = header_font
+            _hc.alignment = center
+            _hc.border = thin_border
+            _hc.fill = total_fill  # amber tint to match on-screen Form B/D
+
     # Summary, Remarks, Signature headers
     ws.merge_cells(f'{get_column_letter(summary_col)}{header_row}:{get_column_letter(summary_col)}{header_row + 1}')
     ws[f'{get_column_letter(summary_col)}{header_row}'] = 'Summary No.\nOf Days'
@@ -1627,6 +1654,11 @@ def _generate_form_d_excel(payroll, est, config, attendance, num_days, rest_days
         col = get_column_letter(day_start_col + d - 1)
         ws[f'{col}{num_row}'] = ''
         ws[f'{col}{num_row}'].border = thin_border
+
+    if _lop_on:
+        for _c in (lop_col, wr_col):
+            ws[f'{get_column_letter(_c)}{num_row}'] = ''
+            ws[f'{get_column_letter(_c)}{num_row}'].border = thin_border
 
     ws[f'{get_column_letter(summary_col)}{num_row}'] = '8'
     ws[f'{get_column_letter(summary_col)}{num_row}'].font = Font(name='Arial', size=7, bold=True)
@@ -1693,6 +1725,19 @@ def _generate_form_d_excel(payroll, est, config, attendance, num_days, rest_days
             elif mark == 'A':
                 cell.font = Font(name='Arial', size=8, color='FF0000')
 
+        # Loss of Pay / Worked on Weekly Rest (LOP system only)
+        if _lop_on:
+            _lopv = att.get('lop_days', 0) or 0
+            _wrv = att.get('wr_days', 0) or 0
+            ws[f'{get_column_letter(lop_col)}{r}'] = int(round(_lopv)) if _lopv == int(_lopv) else round(_lopv, 1)
+            ws[f'{get_column_letter(lop_col)}{r}'].font = data_font
+            ws[f'{get_column_letter(lop_col)}{r}'].alignment = center
+            ws[f'{get_column_letter(lop_col)}{r}'].border = thin_border
+            ws[f'{get_column_letter(wr_col)}{r}'] = int(round(_wrv)) if _wrv == int(_wrv) else round(_wrv, 1)
+            ws[f'{get_column_letter(wr_col)}{r}'].font = data_font
+            ws[f'{get_column_letter(wr_col)}{r}'].alignment = center
+            ws[f'{get_column_letter(wr_col)}{r}'].border = thin_border
+
         # Summary
         ws[f'{get_column_letter(summary_col)}{r}'] = int(round(att['days_present']))
         ws[f'{get_column_letter(summary_col)}{r}'].font = bold_font
@@ -1726,6 +1771,16 @@ def _generate_form_d_excel(payroll, est, config, attendance, num_days, rest_days
         col = get_column_letter(day_start_col + d - 1)
         ws[f'{col}{total_r}'].border = thin_border
         ws[f'{col}{total_r}'].fill = total_fill
+
+    if _lop_on:
+        _t_lop = sum((a.get('lop_days', 0) or 0) for a in attendance)
+        _t_wr = sum((a.get('wr_days', 0) or 0) for a in attendance)
+        for _c, _tv in ((lop_col, _t_lop), (wr_col, _t_wr)):
+            ws[f'{get_column_letter(_c)}{total_r}'] = int(round(_tv))
+            ws[f'{get_column_letter(_c)}{total_r}'].font = Font(name='Arial', size=10, bold=True)
+            ws[f'{get_column_letter(_c)}{total_r}'].alignment = center
+            ws[f'{get_column_letter(_c)}{total_r}'].border = thin_border
+            ws[f'{get_column_letter(_c)}{total_r}'].fill = total_fill
 
     ws[f'{get_column_letter(summary_col)}{total_r}'] = t_days
     ws[f'{get_column_letter(summary_col)}{total_r}'].font = Font(name='Arial', size=10, bold=True)
@@ -1796,10 +1851,18 @@ def _generate_form_d_2625_excel(payroll, est, config, attendance, date_list, num
     rest_fill = PatternFill(start_color='FCE4EC', end_color='FCE4EC', fill_type='solid')
     holiday_fill = PatternFill(start_color='C8E6C9', end_color='C8E6C9', fill_type='solid')
 
-    # Columns: A=Sl, B=Name, C=Designation, D=Place, E..E+num_cols-1=Days, then Summary, Remarks, Signature
+    # Columns: A=Sl, B=Name, C=Designation, D=Place, E..E+num_cols-1=Days,
+    #   [Loss of Pay, Worked Weekly Rest — when LOP on], Summary, Remarks, Signature
+    _lop_on = bool(getattr(config, 'lop_system_enabled', False))
     day_start_col = 5  # Column E
     last_day_col = day_start_col + num_cols - 1
-    summary_col = last_day_col + 1
+    if _lop_on:
+        lop_col = last_day_col + 1
+        wr_col = last_day_col + 2
+        summary_col = last_day_col + 3
+    else:
+        lop_col = wr_col = None
+        summary_col = last_day_col + 1
     remarks_col = summary_col + 1
     sig_col = remarks_col + 1
     last_col_letter = get_column_letter(sig_col)
@@ -1842,6 +1905,9 @@ def _generate_form_d_2625_excel(payroll, est, config, attendance, date_list, num
     for i in range(num_cols):
         col = get_column_letter(day_start_col + i)
         ws.column_dimensions[col].width = 4
+    if _lop_on:
+        ws.column_dimensions[get_column_letter(lop_col)].width = 8
+        ws.column_dimensions[get_column_letter(wr_col)].width = 8
     ws.column_dimensions[get_column_letter(summary_col)].width = 9
     ws.column_dimensions[get_column_letter(remarks_col)].width = 9
     ws.column_dimensions[get_column_letter(sig_col)].width = 14
@@ -1887,6 +1953,17 @@ def _generate_form_d_2625_excel(payroll, est, config, attendance, date_list, num
         else:
             cell.fill = header_fill
 
+    # Loss-of-Pay / Worked-on-Weekly-Rest headers (LOP system only)
+    if _lop_on:
+        for _c, _lbl in ((lop_col, 'Loss of\nPay'), (wr_col, 'Wkd on\nWkly Rest')):
+            _cl = get_column_letter(_c)
+            ws.merge_cells(f'{_cl}{header_row}:{_cl}{header_row + 1}')
+            ws[f'{_cl}{header_row}'] = _lbl
+            ws[f'{_cl}{header_row}'].font = header_font
+            ws[f'{_cl}{header_row}'].alignment = center
+            ws[f'{_cl}{header_row}'].border = thin_border
+            ws[f'{_cl}{header_row}'].fill = total_fill
+
     # Summary, Remarks, Signature headers
     for col_idx, label in [(summary_col, 'Summary No.\nOf Days'), (remarks_col, 'Remarks\nNo of hours'), (sig_col, 'Signature of\nRegister Keeper')]:
         c = get_column_letter(col_idx)
@@ -1917,6 +1994,10 @@ def _generate_form_d_2625_excel(payroll, est, config, attendance, date_list, num
         col = get_column_letter(day_start_col + i)
         ws[f'{col}{num_row}'] = ''
         ws[f'{col}{num_row}'].border = thin_border
+    if _lop_on:
+        for _c in (lop_col, wr_col):
+            ws[f'{get_column_letter(_c)}{num_row}'] = ''
+            ws[f'{get_column_letter(_c)}{num_row}'].border = thin_border
     ws[f'{get_column_letter(summary_col)}{num_row}'] = '8'
     ws[f'{get_column_letter(summary_col)}{num_row}'].font = Font(name='Arial', size=7, bold=True)
     ws[f'{get_column_letter(summary_col)}{num_row}'].alignment = center
@@ -1977,6 +2058,19 @@ def _generate_form_d_2625_excel(payroll, est, config, attendance, date_list, num
             elif mark == 'A':
                 cell.font = Font(name='Arial', size=8, color='FF0000')
 
+        # Loss of Pay / Worked on Weekly Rest (LOP system only)
+        if _lop_on:
+            _lopv = att.get('lop_days', 0) or 0
+            _wrv = att.get('wr_days', 0) or 0
+            ws[f'{get_column_letter(lop_col)}{r}'] = int(round(_lopv)) if _lopv == int(_lopv) else round(_lopv, 1)
+            ws[f'{get_column_letter(lop_col)}{r}'].font = data_font
+            ws[f'{get_column_letter(lop_col)}{r}'].alignment = center
+            ws[f'{get_column_letter(lop_col)}{r}'].border = thin_border
+            ws[f'{get_column_letter(wr_col)}{r}'] = int(round(_wrv)) if _wrv == int(_wrv) else round(_wrv, 1)
+            ws[f'{get_column_letter(wr_col)}{r}'].font = data_font
+            ws[f'{get_column_letter(wr_col)}{r}'].alignment = center
+            ws[f'{get_column_letter(wr_col)}{r}'].border = thin_border
+
         # Summary
         ws[f'{get_column_letter(summary_col)}{r}'] = int(round(att['days_present']))
         ws[f'{get_column_letter(summary_col)}{r}'].font = bold_font
@@ -2009,6 +2103,16 @@ def _generate_form_d_2625_excel(payroll, est, config, attendance, date_list, num
         col = get_column_letter(day_start_col + i)
         ws[f'{col}{total_r}'].border = thin_border
         ws[f'{col}{total_r}'].fill = total_fill
+    if _lop_on:
+        _t_lop = sum((a.get('lop_days', 0) or 0) for a in attendance)
+        _t_wr = sum((a.get('wr_days', 0) or 0) for a in attendance)
+        for _c, _tv in ((lop_col, _t_lop), (wr_col, _t_wr)):
+            ws[f'{get_column_letter(_c)}{total_r}'] = int(round(_tv))
+            ws[f'{get_column_letter(_c)}{total_r}'].font = Font(name='Arial', size=10, bold=True)
+            ws[f'{get_column_letter(_c)}{total_r}'].alignment = center
+            ws[f'{get_column_letter(_c)}{total_r}'].border = thin_border
+            ws[f'{get_column_letter(_c)}{total_r}'].fill = total_fill
+
     ws[f'{get_column_letter(summary_col)}{total_r}'] = t_days
     ws[f'{get_column_letter(summary_col)}{total_r}'].font = Font(name='Arial', size=10, bold=True)
     ws[f'{get_column_letter(summary_col)}{total_r}'].alignment = center
@@ -2069,10 +2173,15 @@ def _generate_attendance_excel(payroll, est, config, attendance, num_days, rest_
     holiday_fill = PatternFill(start_color='C8E6C9', end_color='C8E6C9', fill_type='solid')
     summary_fill = PatternFill(start_color='E8F5E9', end_color='E8F5E9', fill_type='solid')
 
-    # Layout: A=Sr, B=Name, C=UAN, D=ESIC, E..=Days, then Pres, Abs, PH, Total
+    # Layout: A=Sr, B=Name, C=UAN, D=ESIC, E..=Days, then summary columns.
+    # Classic summary = Pres, Abs, PH, Total. With the LOP system on, Abs is
+    # replaced by two manual columns: Pres, LOP, Wkly Rest, PH, Total.
+    _lop_on = bool(getattr(config, 'lop_system_enabled', False))
+    _sum_labels = ['Pres', 'LOP', 'Wkly Rest', 'PH', 'Total'] if _lop_on else ['Pres', 'Abs', 'PH', 'Total']
+    _n_sum = len(_sum_labels)
     day_start = 5
     sum_start = day_start + num_days
-    last_col = get_column_letter(sum_start + 3)
+    last_col = get_column_letter(sum_start + _n_sum - 1)
 
     # Title
     ws.merge_cells(f'A1:{last_col}1')
@@ -2102,8 +2211,8 @@ def _generate_attendance_excel(payroll, est, config, attendance, num_days, rest_
     ws.column_dimensions['D'].width = 12
     for d in range(num_days):
         ws.column_dimensions[get_column_letter(day_start + d)].width = 3.5
-    for i in range(4):
-        ws.column_dimensions[get_column_letter(sum_start + i)].width = 6
+    for i in range(_n_sum):
+        ws.column_dimensions[get_column_letter(sum_start + i)].width = 8 if _lop_on else 6
 
     # Header
     header_row = 6
@@ -2130,7 +2239,7 @@ def _generate_attendance_excel(payroll, est, config, attendance, num_days, rest_
         else:
             cell.fill = header_fill
 
-    for i, text in enumerate(['Pres', 'Abs', 'PH', 'Total']):
+    for i, text in enumerate(_sum_labels):
         col = get_column_letter(sum_start + i)
         cell = ws[f'{col}{header_row}']
         cell.value = text
@@ -2143,7 +2252,7 @@ def _generate_attendance_excel(payroll, est, config, attendance, num_days, rest_
 
     # Data rows
     data_start_row = header_row + 1
-    t_pres = t_abs = t_ph = t_total = 0
+    t_pres = t_abs = t_ph = t_total = t_lop = t_wr = 0
 
     for idx, att in enumerate(attendance):
         r = data_start_row + idx
@@ -2191,8 +2300,11 @@ def _generate_attendance_excel(payroll, est, config, attendance, num_days, rest_
         abs_d = int(round(att['days_absent']))
         ph = int(round(att['paid_holidays']))
         total = int(round(att['total_days']))
+        lop_d = int(round(att.get('lop_days', 0) or 0))
+        wr_d = int(round(att.get('wr_days', 0) or 0))
 
-        for i, val in enumerate([pres, abs_d, ph, total]):
+        _sum_vals = [pres, lop_d, wr_d, ph, total] if _lop_on else [pres, abs_d, ph, total]
+        for i, val in enumerate(_sum_vals):
             col = get_column_letter(sum_start + i)
             cell = ws[f'{col}{r}']
             cell.value = val
@@ -2204,6 +2316,8 @@ def _generate_attendance_excel(payroll, est, config, attendance, num_days, rest_
         t_abs += abs_d
         t_ph += ph
         t_total += total
+        t_lop += lop_d
+        t_wr += wr_d
 
     # Totals row
     total_r = data_start_row + len(attendance)
@@ -2222,7 +2336,8 @@ def _generate_attendance_excel(payroll, est, config, attendance, num_days, rest_
         ws[f'{col}{total_r}'].border = thin_border
         ws[f'{col}{total_r}'].fill = total_fill
 
-    for i, val in enumerate([t_pres, t_abs, t_ph, t_total]):
+    _sum_totals = [t_pres, t_lop, t_wr, t_ph, t_total] if _lop_on else [t_pres, t_abs, t_ph, t_total]
+    for i, val in enumerate(_sum_totals):
         col = get_column_letter(sum_start + i)
         cell = ws[f'{col}{total_r}']
         cell.value = val
@@ -2236,7 +2351,8 @@ def _generate_attendance_excel(payroll, est, config, attendance, num_days, rest_
     ws[f'A{legend_r}'] = 'Legend:'
     ws[f'A{legend_r}'].font = bold_font
     ws.merge_cells(f'B{legend_r}:J{legend_r}')
-    ws[f'B{legend_r}'] = 'P = Present  |  A = Absent  |  R = Rest/Weekly Off  |  H = Holiday'
+    ws[f'B{legend_r}'] = ('P = Present  |  A = Absent  |  R = Rest/Weekly Off  |  H = Holiday'
+                          + ('  |  LOP = Loss of Pay (days)  |  Wkly Rest = Worked on weekly rest (days)' if _lop_on else ''))
     ws[f'B{legend_r}'].font = Font(name='Arial', size=8)
 
     # Print setup
@@ -2281,8 +2397,17 @@ def _map_heads_to_form_b(heads):
 
 def _build_form_b_rows(entries, heads, head_map, config, payroll):
     """Build row data for Form B"""
+    import calendar as _cal
     rows = []
     working_days = payroll.working_days or 0
+
+    # Month-days basis for the Loss-of-Pay system (mirrors the payroll lop_divisor):
+    # calendar days by default, or a fixed 26 / 30.
+    _lop_basis = getattr(config, 'lop_divisor', 'calendar') or 'calendar'
+    if _lop_basis in ('26', '30'):
+        _lop_month_days = int(_lop_basis)
+    else:
+        _lop_month_days = _cal.monthrange(payroll.year, payroll.month)[1]
 
     for entry in entries:
         emp = entry.employee
@@ -2344,6 +2469,11 @@ def _build_form_b_rows(entries, heads, head_map, config, payroll):
             'days_worked': entry.days_present,
             'ph_days': ph_count,
             'ot_days': entry.ot_hours,  # OT in days (as per Form B)
+            # Manual Loss-of-Pay system (only meaningful when config.lop_system_enabled)
+            'lop_days': getattr(entry, 'lop_days', 0) or 0,
+            'wr_days': getattr(entry, 'weekly_rest_worked_days', 0) or 0,
+            'payable_days': entry.total_payable_days,
+            'month_days': _lop_month_days,
             'basic': basic_amt,
             'spl_basic': spl_basic_amt,
             'da': da_amt,
@@ -2379,9 +2509,47 @@ def _generate_form_b_excel(payroll, est, config, entries, rows, head_map):
     from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
     from openpyxl.utils import get_column_letter
 
+    from openpyxl.utils import get_column_letter as _gcl
+
     wb = Workbook()
     ws = wb.active
     ws.title = f"Form B - {payroll.month_name} {payroll.year}"
+
+    # ── Loss-of-Pay system: three extra day columns (Month Days / Loss of Pay /
+    #    Worked on Weekly Rest) inserted after "Rate of Wages", and the days
+    #    column relabelled "Total Attendance Paid". Default OFF → classic A-AA. ──
+    _lop_on = bool(getattr(config, 'lop_system_enabled', False))
+    _epf_on = getattr(config, 'epf_applicable', False)
+    _col_b_header = 'UAN' if _epf_on else 'ESIC IP\nNo.'
+
+    # Ordered table columns: (key, header, width). Amount columns are flagged for
+    # #,##0 number format via the _AMOUNT_KEYS set below.
+    _cols = [
+        ('sr', 'Sr.\nNo.', 5), ('id', _col_b_header, 11), ('name', 'Name', 22),
+        ('rate', 'Rate of\nWages', 10),
+    ]
+    if _lop_on:
+        _cols += [('month_days', 'Month\nDays', 7), ('lop', 'Loss of\nPay', 8),
+                  ('wr', 'Worked on\nWkly Rest', 9)]
+    _cols += [
+        ('days', 'Total\nAtt. Paid' if _lop_on else 'Days\nWorked', 8),
+        ('ph', 'Paid\nHol.', 6), ('ot_days', 'OT\nDays', 7),
+        ('basic', 'Basic', 10), ('spl', 'Spl.\nBasic', 9), ('da', 'DA', 9),
+        ('ot_amt', 'OT\nAmount', 10), ('hra', 'HRA', 8), ('others', 'Others', 8),
+        ('nph', 'NPH\nAmt.', 9), ('gross', 'Gross\nWages', 13),
+        ('pf', 'PF', 9), ('esic', 'ESIC', 8), ('pt', 'PT', 7), ('it', 'Income\nTax', 8),
+        ('ins', 'Insur.', 8), ('lwf', 'LWF', 6), ('recov', 'Recov.', 10),
+        ('total_ded', 'Total\nDed.', 11), ('net', 'Net\nPayment', 13),
+        ('receipt', 'Receipt /\nBank\nTrans. ID', 13), ('paydate', 'Date of\nPayment', 10),
+        ('rmk', 'Rmk.', 7),
+    ]
+    _AMOUNT_KEYS = {'basic', 'spl', 'da', 'ot_amt', 'hra', 'others', 'nph', 'gross',
+                    'pf', 'esic', 'pt', 'it', 'ins', 'lwf', 'recov', 'total_ded', 'net'}
+    # key -> 1-based column index, and its letter
+    _cix = {key: i for i, (key, _, _) in enumerate(_cols, 1)}
+    def _CL(key):
+        return _gcl(_cix[key])
+    total_cols_n = len(_cols)
 
     # ---- Styles (11pt for readable Legal print) ----
     title_font = Font(name='Arial', size=14, bold=True)
@@ -2411,8 +2579,8 @@ def _generate_form_b_excel(payroll, est, config, entries, rows, head_map):
     ded_fill = PatternFill(start_color='FFF2CC', end_color='FFF2CC', fill_type='solid')
 
     # ---- Row 1-3: Title ----
-    # Reduced to A-AA (27 columns) — removed separate ESIC IP column
-    last_col = 'AA'
+    # Table spans A .. last_col (27 columns classic, +3 when the LOP system is on)
+    last_col = _gcl(total_cols_n)
     ws.merge_cells(f'A1:{last_col}1')
     ws['A1'] = 'FORM B'
     ws['A1'].font = title_font
@@ -2480,128 +2648,61 @@ def _generate_form_b_excel(payroll, est, config, entries, rows, head_map):
     ws['R9'] = f'Salary for the Month of: - {payroll.month_name}-{payroll.year}'
     ws['R9'].font = Font(name='Arial', size=10, bold=True, color='FF0000')
 
-    # ---- Data Table ----
-    # COLUMNS (A-AA = 27 columns):
-    # A=Sr, B=Emp.Code, C=Name, D=Rate, E=Days Worked, F=PH Days, G=OT Days,
-    # H=Basic, I=Spl Basic, J=DA, K=OT Amt, L=HRA, M=Others, N=NPH,
-    # O=Gross, P=PF, Q=ESIC, R=Society, S=Income Tax, T=Insurance, U=LWF, V=Recoveries,
-    # W=Total Ded, X=Net Pay, Y=Receipt/Bank, Z=Date of Payment, AA=Remarks
-
+    # ---- Data Table (index-based; +3 columns when the LOP system is on) ----
     header_row = 11
     sub_header_row = 12
 
-    # Optimized column widths for Legal landscape with 11pt font
-    col_widths = {
-        'A': 5, 'B': 11, 'C': 22, 'D': 10, 'E': 8, 'F': 6, 'G': 7,
-        'H': 10, 'I': 9, 'J': 9, 'K': 10, 'L': 8, 'M': 8, 'N': 9,
-        'O': 13, 'P': 9, 'Q': 8, 'R': 7, 'S': 8, 'T': 8, 'U': 6, 'V': 10,
-        'W': 11, 'X': 13, 'Y': 13, 'Z': 10, 'AA': 7
-    }
-    for col_letter, width in col_widths.items():
-        ws.column_dimensions[col_letter].width = width
+    # Column widths from the ordered column list
+    for _k, _hdr, _w in _cols:
+        ws.column_dimensions[_CL(_k)].width = _w
 
-    # --- Header Row 1 (merged headers) ---
-    _epf_on = getattr(config, 'epf_applicable', False)
-    _col_b_header = 'UAN' if _epf_on else 'ESIC IP\nNo.'
-    headers_r1 = [
-        ('A', 'A', 'Sr.\nNo.'),
-        ('B', 'B', _col_b_header),
-        ('C', 'C', 'Name'),
-        ('D', 'D', 'Rate of\nWages'),
-        ('E', 'E', 'Days\nWorked'),
-        ('F', 'F', 'Paid\nHol.'),
-        ('G', 'G', 'OT\nDays'),
-        ('H', 'H', 'Basic'),
-        ('I', 'I', 'Spl.\nBasic'),
-        ('J', 'J', 'DA'),
-        ('K', 'K', 'OT\nAmount'),
-        ('L', 'L', 'HRA'),
-        ('M', 'M', 'Others'),
-        ('N', 'N', 'NPH\nAmt.'),
-        ('O', 'O', 'Gross\nWages'),
-    ]
+    # Deduction sub-columns get a merged "Deductions" group header
+    _ded_keys = ('pf', 'esic', 'pt', 'it', 'ins', 'lwf', 'recov')
 
-    for start_col, end_col, text in headers_r1:
-        ws.merge_cells(f'{start_col}{header_row}:{end_col}{sub_header_row}')
-        cell = ws[f'{start_col}{header_row}']
-        cell.value = text
+    # --- Header row: every non-deduction column spans header_row:sub_header_row ---
+    for _k, _hdr, _w in _cols:
+        if _k in _ded_keys:
+            continue
+        _cl = _CL(_k)
+        ws.merge_cells(f'{_cl}{header_row}:{_cl}{sub_header_row}')
+        cell = ws[f'{_cl}{header_row}']
+        cell.value = _hdr
         cell.font = header_font
         cell.alignment = center
         cell.border = thin_border
         cell.fill = header_fill
+    # Tints
+    ws[f'{_CL("gross")}{header_row}'].fill = gross_fill
+    ws[f'{_CL("net")}{header_row}'].fill = net_fill
+    ws[f'{_CL("receipt")}{header_row}'].font = Font(name='Arial', size=8, bold=True)
+    if _lop_on:
+        for _k in ('month_days', 'lop', 'wr'):
+            ws[f'{_CL(_k)}{header_row}'].fill = ded_fill
 
-    # Gross Wages header — green tint
-    ws[f'O{header_row}'].fill = gross_fill
-
-    # Deductions header (merged P-V)
-    ws.merge_cells(f'P{header_row}:V{header_row}')
-    ws[f'P{header_row}'] = 'Deductions'
-    ws[f'P{header_row}'].font = header_font
-    ws[f'P{header_row}'].alignment = center
-    ws[f'P{header_row}'].border = thin_border
-    ws[f'P{header_row}'].fill = ded_fill
-
-    # Deduction sub-headers (row 12)
-    ded_headers = [
-        ('P', 'PF'), ('Q', 'ESIC'), ('R', 'PT'),
-        ('S', 'Income\nTax'), ('T', 'Insur.'), ('U', 'LWF'), ('V', 'Recov.')
-    ]
-    for col, text in ded_headers:
-        cell = ws[f'{col}{sub_header_row}']
-        cell.value = text
+    # Deductions merged group header over pf..recov
+    ws.merge_cells(f'{_CL("pf")}{header_row}:{_CL("recov")}{header_row}')
+    _dc = ws[f'{_CL("pf")}{header_row}']
+    _dc.value = 'Deductions'
+    _dc.font = header_font
+    _dc.alignment = center
+    _dc.border = thin_border
+    _dc.fill = ded_fill
+    for _k in _ded_keys:
+        _hdr = next(h for k, h, _w in _cols if k == _k)
+        cell = ws[f'{_CL(_k)}{sub_header_row}']
+        cell.value = _hdr
         cell.font = header_font
         cell.alignment = center
         cell.border = thin_border
         cell.fill = ded_fill
 
-    # Total Deductions
-    ws.merge_cells(f'W{header_row}:W{sub_header_row}')
-    ws[f'W{header_row}'] = 'Total\nDed.'
-    ws[f'W{header_row}'].font = header_font
-    ws[f'W{header_row}'].alignment = center
-    ws[f'W{header_row}'].border = thin_border
-    ws[f'W{header_row}'].fill = ded_fill
-
-    # Net Payment
-    ws.merge_cells(f'X{header_row}:X{sub_header_row}')
-    ws[f'X{header_row}'] = 'Net\nPayment'
-    ws[f'X{header_row}'].font = header_font
-    ws[f'X{header_row}'].alignment = center
-    ws[f'X{header_row}'].border = thin_border
-    ws[f'X{header_row}'].fill = net_fill
-
-    # Receipt / Bank
-    ws.merge_cells(f'Y{header_row}:Y{sub_header_row}')
-    ws[f'Y{header_row}'] = 'Receipt /\nBank\nTrans. ID'
-    ws[f'Y{header_row}'].font = Font(name='Arial', size=8, bold=True)
-    ws[f'Y{header_row}'].alignment = center
-    ws[f'Y{header_row}'].border = thin_border
-    ws[f'Y{header_row}'].fill = header_fill
-
-    # Date of Payment
-    ws.merge_cells(f'Z{header_row}:Z{sub_header_row}')
-    ws[f'Z{header_row}'] = 'Date of\nPayment'
-    ws[f'Z{header_row}'].font = header_font
-    ws[f'Z{header_row}'].alignment = center
-    ws[f'Z{header_row}'].border = thin_border
-    ws[f'Z{header_row}'].fill = header_fill
-
-    # Remarks
-    ws.merge_cells(f'AA{header_row}:AA{sub_header_row}')
-    ws[f'AA{header_row}'] = 'Rmk.'
-    ws[f'AA{header_row}'].font = header_font
-    ws[f'AA{header_row}'].alignment = center
-    ws[f'AA{header_row}'].border = thin_border
-    ws[f'AA{header_row}'].fill = header_fill
-
-    # Header row heights
     ws.row_dimensions[header_row].height = 36
     ws.row_dimensions[sub_header_row].height = 28
 
     # ---- Data Rows ----
     data_start_row = 13
     totals = {
-        'days_worked': 0, 'ph_days': 0, 'ot_days': 0,
+        'days_worked': 0, 'ph_days': 0, 'ot_days': 0, 'lop_days': 0, 'wr_days': 0,
         'basic': 0, 'spl_basic': 0, 'da': 0, 'ot_amount': 0,
         'hra': 0, 'others': 0, 'nph': 0, 'gross': 0,
         'pf': 0, 'esic': 0, 'pt': 0, 'income_tax': 0,
@@ -2612,56 +2713,57 @@ def _generate_form_b_excel(payroll, est, config, entries, rows, head_map):
     for idx, row_data in enumerate(rows):
         r = data_start_row + idx
         sl = idx + 1
-
         ws.row_dimensions[r].height = 26
 
-        # Build cells: A-AA (27 columns)
         _id_val = row_data.get('uan', '') if _epf_on else row_data.get('esic_ip', '')
-        data_cells = [
-            ('A', sl, center, data_font, None),
-            ('B', _id_val, center, data_font, None),
-            ('C', row_data['name'], left_align, name_font, None),
-            ('D', float(row_data['rate']) if row_data['rate'] else 0, right_align, data_font, None),
-            ('E', row_data['days_worked'], center, data_font, None),
-            ('F', round(row_data.get('ph_days', 0)), center, data_font, None),
-            ('G', round(row_data['ot_days']) if row_data['ot_days'] else 0, center, data_font, None),
-            ('H', round(row_data['basic']), right_align, data_font, None),
-            ('I', round(row_data['spl_basic']), right_align, data_font, None),
-            ('J', round(row_data['da']), right_align, data_font, None),
-            ('K', round(row_data['ot_amount']), right_align, data_font, None),
-            ('L', round(row_data['hra']), right_align, data_font, None),
-            ('M', round(row_data['others']), right_align, data_font, None),
-            ('N', round(row_data['nph']), right_align, data_font, None),
-            ('O', round(row_data['gross']), right_align, gross_font, gross_fill),
-            ('P', round(row_data['pf']), right_align, data_font, None),
-            ('Q', round(row_data['esic']), right_align, data_font, None),
-            ('R', round(row_data.get('pt', 0)), right_align, data_font, None),
-            ('S', round(row_data['income_tax']), right_align, data_font, None),
-            ('T', round(row_data['insurance']), right_align, data_font, None),
-            ('U', round(row_data['lwf']), right_align, data_font, None),
-            ('V', round(row_data['recoveries']), right_align, data_font, None),
-            ('W', round(row_data['total_ded']), right_align, bold_font, None),
-            ('X', round(row_data['net_pay']), right_align, net_font, net_fill),
-            ('Y', '', center, data_font, None),
-            ('Z', '', center, data_font, None),
-            ('AA', '', center, data_font, None),
-        ]
+        _vals = {
+            'sr': sl, 'id': _id_val, 'name': row_data['name'],
+            'rate': float(row_data['rate']) if row_data['rate'] else 0,
+            'days': row_data['days_worked'],
+            'ph': round(row_data.get('ph_days', 0)),
+            'ot_days': round(row_data['ot_days']) if row_data['ot_days'] else 0,
+            'basic': round(row_data['basic']), 'spl': round(row_data['spl_basic']),
+            'da': round(row_data['da']), 'ot_amt': round(row_data['ot_amount']),
+            'hra': round(row_data['hra']), 'others': round(row_data['others']),
+            'nph': round(row_data['nph']), 'gross': round(row_data['gross']),
+            'pf': round(row_data['pf']), 'esic': round(row_data['esic']),
+            'pt': round(row_data.get('pt', 0)), 'it': round(row_data['income_tax']),
+            'ins': round(row_data['insurance']), 'lwf': round(row_data['lwf']),
+            'recov': round(row_data['recoveries']),
+            'total_ded': round(row_data['total_ded']), 'net': round(row_data['net_pay']),
+            'receipt': '', 'paydate': '', 'rmk': '',
+        }
+        if _lop_on:
+            _vals['month_days'] = round(row_data.get('month_days', 0))
+            _vals['lop'] = row_data.get('lop_days', 0) or 0
+            _vals['wr'] = row_data.get('wr_days', 0) or 0
 
-        for col, val, align, font, fill in data_cells:
-            cell = ws[f'{col}{r}']
-            cell.value = val
-            cell.font = font
-            cell.alignment = align
+        for _k, _hdr, _w in _cols:
+            cell = ws[f'{_CL(_k)}{r}']
+            cell.value = _vals.get(_k, '')
+            if _k == 'name':
+                cell.font = name_font
+                cell.alignment = left_align
+            elif _k == 'gross':
+                cell.font = gross_font
+                cell.alignment = right_align
+                cell.fill = gross_fill
+            elif _k == 'net':
+                cell.font = net_font
+                cell.alignment = right_align
+                cell.fill = net_fill
+            elif _k in _AMOUNT_KEYS:
+                cell.font = data_font
+                cell.alignment = right_align
+            else:
+                cell.font = data_font
+                cell.alignment = center
             cell.border = thin_border
-            if fill:
-                cell.fill = fill
-            # Number format — rate column (D) keeps decimals, other amounts rounded
-            if col == 'D':
+            if _k == 'rate':
                 cell.number_format = '#,##0.00'
-            elif col in ('H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X'):
+            elif _k in _AMOUNT_KEYS:
                 cell.number_format = '#,##0'
 
-        # Accumulate totals
         for key in totals:
             totals[key] += row_data.get(key, 0)
 
@@ -2669,60 +2771,45 @@ def _generate_form_b_excel(payroll, est, config, entries, rows, head_map):
     total_row = data_start_row + len(rows)
     ws.row_dimensions[total_row].height = 28
 
-    ws.merge_cells(f'A{total_row}:C{total_row}')
+    ws.merge_cells(f'{_CL("sr")}{total_row}:{_CL("name")}{total_row}')
+    ws[f'{_CL("sr")}{total_row}'] = f'TOTAL ({len(rows)} Employees)'
+    ws[f'{_CL("sr")}{total_row}'].font = bold_font
+    ws[f'{_CL("sr")}{total_row}'].alignment = center
+    ws[f'{_CL("sr")}{total_row}'].border = thin_border
+    ws[f'{_CL("sr")}{total_row}'].fill = total_fill
 
-    total_cells = [
-        ('A', '', center),
-        ('D', '', center),
-        ('E', round(totals['days_worked']), center),
-        ('F', round(totals['ph_days']), center),
-        ('G', round(totals['ot_days']), center),
-        ('H', round(totals['basic']), right_align),
-        ('I', round(totals['spl_basic']), right_align),
-        ('J', round(totals['da']), right_align),
-        ('K', round(totals['ot_amount']), right_align),
-        ('L', round(totals['hra']), right_align),
-        ('M', round(totals['others']), right_align),
-        ('N', round(totals['nph']), right_align),
-        ('O', round(totals['gross']), right_align),
-        ('P', round(totals['pf']), right_align),
-        ('Q', round(totals['esic']), right_align),
-        ('R', round(totals['pt']), right_align),
-        ('S', round(totals['income_tax']), right_align),
-        ('T', round(totals['insurance']), right_align),
-        ('U', round(totals['lwf']), right_align),
-        ('V', round(totals['recoveries']), right_align),
-        ('W', round(totals['total_ded']), right_align),
-        ('X', round(totals['net_pay']), right_align),
-        ('Y', '', center),
-        ('Z', '', center),
-        ('AA', '', center),
-    ]
+    _tot_vals = {
+        'days': round(totals['days_worked']), 'ph': round(totals['ph_days']),
+        'ot_days': round(totals['ot_days']),
+        'basic': round(totals['basic']), 'spl': round(totals['spl_basic']),
+        'da': round(totals['da']), 'ot_amt': round(totals['ot_amount']),
+        'hra': round(totals['hra']), 'others': round(totals['others']),
+        'nph': round(totals['nph']), 'gross': round(totals['gross']),
+        'pf': round(totals['pf']), 'esic': round(totals['esic']), 'pt': round(totals['pt']),
+        'it': round(totals['income_tax']), 'ins': round(totals['insurance']),
+        'lwf': round(totals['lwf']), 'recov': round(totals['recoveries']),
+        'total_ded': round(totals['total_ded']), 'net': round(totals['net_pay']),
+    }
+    if _lop_on:
+        _tot_vals['lop'] = round(totals.get('lop_days', 0))
+        _tot_vals['wr'] = round(totals.get('wr_days', 0))
 
-    ws[f'A{total_row}'] = f'TOTAL ({len(rows)} Employees)'
-    ws[f'A{total_row}'].font = bold_font
-    ws[f'A{total_row}'].alignment = center
-    ws[f'A{total_row}'].border = thin_border
-    ws[f'A{total_row}'].fill = total_fill
-
-    for col, val, align in total_cells:
-        if col == 'A':
+    for _k, _hdr, _w in _cols:
+        if _k in ('sr', 'id', 'name'):
             continue
-        cell = ws[f'{col}{total_row}']
-        cell.value = val
+        cell = ws[f'{_CL(_k)}{total_row}']
+        cell.value = _tot_vals.get(_k, '')
         cell.font = bold_font
-        cell.alignment = align
+        cell.alignment = right_align if _k in _AMOUNT_KEYS else center
         cell.border = thin_border
         cell.fill = total_fill
+        if _k in _AMOUNT_KEYS:
+            cell.number_format = '#,##0'
 
-    # Apply border and fill to merged cells B-C in total row
-    for col in ['B', 'C']:
-        cell = ws[f'{col}{total_row}']
+    for _k in ('id', 'name'):
+        cell = ws[f'{_CL(_k)}{total_row}']
         cell.border = thin_border
         cell.fill = total_fill
-    # Number format for total amount cells
-    for col in ('H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X'):
-        ws[f'{col}{total_row}'].number_format = '#,##0'
 
     # ---- Print Setup — Legal Size Landscape ----
     from openpyxl.worksheet.page import PageMargins, PrintPageSetup
@@ -3484,6 +3571,9 @@ def _build_payslip_data(payroll_id):
             'earnings': earnings,
             'deductions': deductions,
             'daily_rate': daily_rate,
+            # Manual Loss-of-Pay system (shown only when config.lop_system_enabled)
+            'lop_days': getattr(entry, 'lop_days', 0) or 0,
+            'wr_days': getattr(entry, 'weekly_rest_worked_days', 0) or 0,
         })
 
     return payroll, est, config, slips, heads

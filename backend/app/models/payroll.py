@@ -38,6 +38,18 @@ class PayrollConfig(db.Model):
     # Per-absent-day deduction basis: 'calendar' = ÷ days-in-month, '26', '30'.
     lop_divisor = db.Column(db.String(10), nullable=False, default='calendar')
 
+    # --- Manual "Loss of Pay" system (per-establishment toggle) ---
+    # Some clients maintain the wage register with TWO manually-entered day
+    # counts instead of a plain "days present":
+    #   • Loss of Pay (Absent) days  → reduce the payable days
+    #   • Worked on Weekly Rest days → add extra payable days
+    # so Total Attendance Paid = month-days − LOP + Weekly-Rest-Worked, and the
+    # salary is pro-rated on that (gross ÷ lop_divisor × payable). When ON, the
+    # two columns appear on the process page, the Universal Template, Form B,
+    # the attendance / Form D registers and the wage slips. Default OFF → every
+    # existing establishment behaves exactly as before.
+    lop_system_enabled = db.Column(db.Boolean, default=False)
+
     # --- Compliance Calculation Basis ---
     # 'basic_da'  = EPF/ESIC calculated on Basic + DA only (most common)
     # 'gross'     = EPF/ESIC calculated on Gross salary
@@ -480,6 +492,13 @@ class PayrollEntry(db.Model):
     paid_holidays = db.Column(db.Float, default=0)
     ot_hours = db.Column(db.Float, default=0)         # OT in hours or days depending on config
     total_payable_days = db.Column(db.Float, default=0)
+
+    # --- Manual "Loss of Pay" system (only used when PayrollConfig.lop_system_enabled) ---
+    # Manually entered by the user (not auto-calculated):
+    #   lop_days                = Loss-of-Pay / absent days  → reduce payable days
+    #   weekly_rest_worked_days = days worked on a weekly-rest/off day → add payable days
+    lop_days = db.Column(db.Float, default=0)
+    weekly_rest_worked_days = db.Column(db.Float, default=0)
 
     # Earnings
     gross_salary = db.Column(db.Float, default=0)      # Full month gross
