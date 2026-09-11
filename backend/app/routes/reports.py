@@ -197,9 +197,21 @@ def quick_reports():
 # REPORT: Form B — Wage Register (Government)
 # =============================================
 
+def _entry_has_pay(entry):
+    """True if the employee actually earned something this month.
+    Used to keep zero-salary employees OUT of display reports — an employee
+    whose Rate/Basic/attendance (and therefore Gross) all come to zero must
+    not appear on the wage register, salary statement, attendance register,
+    Form D or wage slips."""
+    return ((entry.total_earnings or 0) > 0
+            or (entry.earned_gross or 0) > 0
+            or (entry.net_pay or 0) > 0)
+
+
 def _get_payroll_data(payroll_id, include_zero=False):
     """Common helper to fetch all data needed for reports.
-    By default, excludes employees with zero attendance (days_present == 0).
+    By default, excludes employees with zero attendance (days_present == 0)
+    AND employees whose salary works out to zero (zero rate/basic/gross).
     Set include_zero=True to include them (e.g., for ESIC template).
     """
     payroll = MonthlyPayroll.query.get_or_404(payroll_id)
@@ -214,6 +226,11 @@ def _get_payroll_data(payroll_id, include_zero=False):
         query = query.filter(PayrollEntry.days_present > 0)
 
     entries = query.all()
+
+    # Also drop any employee whose salary is effectively zero (zero rate/basic/
+    # gross/net) — no zero-salary employee should appear in a display report.
+    if not include_zero:
+        entries = [e for e in entries if _entry_has_pay(e)]
 
     # Get earning heads for this establishment
     heads = SalaryHead.query.filter_by(
@@ -3525,6 +3542,11 @@ def _build_payslip_data(payroll_id):
     for entry in entries:
         emp = entry.employee
 
+        # Skip zero-salary employees — no wage slip for anyone whose Rate/Basic/
+        # attendance (and therefore pay) all come to zero.
+        if not _entry_has_pay(entry):
+            continue
+
         # Build head-wise earnings
         earnings = []
         for head in heads:
@@ -3844,6 +3866,9 @@ def _build_monthly_compliance(payroll_id):
 
     for entry in entries:
         emp = entry.employee
+        # Skip zero-salary employees — no zero-pay row on the compliance statement.
+        if not _entry_has_pay(entry):
+            continue
         epf_er = entry.epf_ac01 + entry.epf_eps + entry.epf_edli + entry.epf_admin
         total_ee = entry.epf_employee + entry.esic_employee
         total_er = epf_er + entry.esic_employer
