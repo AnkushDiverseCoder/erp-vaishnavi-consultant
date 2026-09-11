@@ -209,6 +209,20 @@
                 <tr class="tot"><td>Total Net Payable</td><td class="v">{{ "{:,.0f}".format(summary.net) }}</td></tr>
             </table>
         </div>
+        <div class="cs-card" style="flex:1 1 320px;">
+            <div class="cs-head" style="background:#166534;">Client Cash-Flow Summary</div>
+            <table>
+                <tr><td>Net Salary to Employees</td><td class="v">{{ "{:,.0f}".format(summary.net) }}</td></tr>
+                <tr><td>EPF Challan (to EPFO)</td><td class="v">{{ "{:,.0f}".format(summary.epf_challan) }}</td></tr>
+                <tr><td>ESIC Challan (to ESIC)</td><td class="v">{{ "{:,.0f}".format(summary.esic_challan) }}</td></tr>
+                <tr><td>Professional Tax (to Govt)</td><td class="v">{{ "{:,.0f}".format(summary.pt) }}</td></tr>
+                <tr><td>Professional Fee ({{ summary.fee_type }})</td><td class="v">{{ "{:,.0f}".format(summary.professional_fee) }}</td></tr>
+                {% if summary.other_charges %}
+                <tr><td>Other Charges{% if summary.other_charges_desc %} — {{ summary.other_charges_desc }}{% endif %}</td><td class="v">{{ "{:,.0f}".format(summary.other_charges) }}</td></tr>
+                {% endif %}
+                <tr class="tot"><td>Total Client Cash Outflow</td><td class="v">{{ "{:,.0f}".format(summary.total_outflow) }}</td></tr>
+            </table>
+        </div>
     </div>
 
     <div style="margin-top:16px; display:flex; justify-content:space-between; font-size:.68rem; color:#94a3b8;">

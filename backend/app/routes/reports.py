@@ -2957,6 +2957,24 @@ def _build_client_statement_data(payroll_id):
                               + summary['epf_edli'] + summary['epf_admin'])
     summary['esic_challan'] = summary['esic_ee'] + summary['esic_er']
 
+    # ── Professional (consultant) fee + client cash-flow ──
+    # Fee actually charged for THIS filing month (Monthly → every month;
+    # Quarterly/Yearly → only in the billing month). Plus any one-off other
+    # charges recorded on the payroll (e.g. annual-return filing).
+    try:
+        prof_fee = round(est.fee_for_filing_month(payroll.month) or 0)
+    except Exception:
+        prof_fee = round(getattr(est, 'fee_amount', 0) or 0)
+    other_charges = round(getattr(payroll, 'other_charges_amount', 0) or 0)
+    summary['professional_fee'] = prof_fee
+    summary['fee_type'] = (getattr(est, 'fee_type', None) or 'Monthly')
+    summary['other_charges'] = other_charges
+    summary['other_charges_desc'] = getattr(payroll, 'other_charges_description', None) or ''
+    # Total cash the client actually pays out this month:
+    #   Net salary to employees + EPF challan + ESIC challan + PT + consultant fee + other charges
+    summary['total_outflow'] = (summary['net'] + summary['epf_challan'] + summary['esic_challan']
+                                + summary['pt'] + prof_fee + other_charges)
+
     return payroll, est, config, heads, rows, summary, lop_on, month_days
 
 
@@ -3221,6 +3239,20 @@ def _generate_client_statement_excel(payroll, est, config, heads, rows, summary,
         ('Total Employer Cost (CTC)', summary['ctc']),
         ('Total Net Payable to Employees', summary['net']),
     ], '1A237E')
+
+    # Client cash-flow (where the money actually goes this month)
+    _cash = [
+        ('Net Salary to Employees', summary['net']),
+        ('EPF Challan (to EPFO)', summary['epf_challan']),
+        ('ESIC Challan (to ESIC)', summary['esic_challan']),
+        ('Professional Tax (to Govt)', summary['pt']),
+        (f"Professional Fee ({summary.get('fee_type', 'Monthly')})", summary.get('professional_fee', 0)),
+    ]
+    if summary.get('other_charges'):
+        _cash.append((('Other Charges — ' + summary.get('other_charges_desc', '')).strip(' —'),
+                      summary['other_charges']))
+    _cash.append(('TOTAL CLIENT CASH OUTFLOW', summary.get('total_outflow', 0)))
+    _panel('CLIENT CASH-FLOW SUMMARY', _cash, '166534')
 
     # Print setup — Legal landscape, fit to width
     ws.sheet_properties.pageSetUpPr = PageSetupProperties(fitToPage=True)
