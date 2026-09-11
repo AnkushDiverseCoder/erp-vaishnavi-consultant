@@ -2391,15 +2391,14 @@ def save_attendance(payroll_id):
                 admin_base = eps_edli_wages     # capped at ₹15,000 (unchanged)
             entry.epf_admin = round(admin_base * config.epf_admin_rate / 100)
 
-            # ── 12% vs 13% employer choice ──
-            # When the establishment opts to pay only 12% (A/c 01 3.67% + EPS
-            # 8.33%), the 1% EDLI (0.5%) + Admin (0.5%) charges are NOT paid.
-            # Default ON → full 13% (unchanged for every existing client).
-            if not getattr(config, 'epf_pay_admin_edli', True):
-                entry.epf_edli = 0
-                entry.epf_admin = 0
+            # NOTE: EDLI (0.5%) + Admin (0.5%) are ALWAYS paid by the employer —
+            # the total EPF challan is always 25% (EE 12% + ER 13%). The 12% vs
+            # 13% establishment setting is only a PRESENTATION choice in the
+            # Client Salary Statement (whether the 1% is bundled into the CTC or
+            # shown separately as an establishment welfare liability); it never
+            # changes what is actually deposited. So nothing is zeroed here.
 
-            # Total employer contribution
+            # Total employer contribution (full 13%)
             entry.epf_employer = entry.epf_ac01 + entry.epf_eps + entry.epf_admin + entry.epf_edli
 
         # ========================================

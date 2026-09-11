@@ -565,17 +565,20 @@
                 <!-- Employer EPF Share: 12% vs 13% -->
                 <div class="row g-2 mt-2 p-2" style="background:#eff6ff; border:1px solid #bfdbfe; border-radius:8px;">
                     <div class="col-md-5">
-                        <label class="form-label" style="font-size:0.8rem; font-weight:600;">Employer EPF Contribution</label>
+                        <label class="form-label" style="font-size:0.8rem; font-weight:600;">Employer EPF — CTC presentation</label>
                         <select name="epf_employer_share" class="form-select form-select-sm">
-                            <option value="13" {% if not config or config.epf_pay_admin_edli %}selected{% endif %}>13% — with EDLI (0.5%) + Admin (0.5%)</option>
-                            <option value="12" {% if config and not config.epf_pay_admin_edli %}selected{% endif %}>12% — only A/c 01 (3.67%) + EPS (8.33%), NO EDLI / Admin</option>
+                            <option value="13" {% if not config or config.epf_pay_admin_edli %}selected{% endif %}>13% — EDLI + Admin (1%) included in employer share / CTC</option>
+                            <option value="12" {% if config and not config.epf_pay_admin_edli %}selected{% endif %}>12% (CTC) — EDLI + Admin (1%) shown separately as establishment welfare liability</option>
                         </select>
                     </div>
                     <div class="col-md-7 d-flex align-items-end">
                         <small class="text-muted">
-                            Choose <strong>12%</strong> for establishments that do NOT pay the 1% EDLI + Admin
-                            charges. This flows through the ECR, the challan and the Client Salary Statement
-                            cash-flow. Default is <strong>13%</strong> (full statutory).
+                            The EPF challan is <strong>always 25%</strong> (Employee 12% + Employer 13%) — the
+                            1% EDLI+Admin is <strong>always paid</strong>. This setting only changes the
+                            <strong>Client Salary Statement</strong>: <strong>13%</strong> bundles the 1% into the
+                            employer share/CTC; <strong>12%</strong> (for CTC clients) loads only 24% (EE 12% +
+                            ER 12%) into the CTC and shows the remaining <strong>1% (EDLI+Admin)</strong>
+                            separately as the establishment's welfare liability. It does NOT change the ECR or challan.
                         </small>
                     </div>
                 </div>

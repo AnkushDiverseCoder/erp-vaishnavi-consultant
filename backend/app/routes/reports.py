@@ -2867,6 +2867,10 @@ def _build_client_statement_data(payroll_id):
     payroll, est, config, entries, heads = _get_payroll_data(payroll_id)
 
     lop_on = bool(getattr(config, 'lop_system_enabled', False))
+    # EPF employer presentation: True = 13% (EDLI+Admin bundled in CTC);
+    # False = 12% (CTC carries only A/c 01 + EPS; the 1% EDLI+Admin is shown
+    # separately as an establishment welfare liability, still in the 25% challan).
+    _epf_13 = getattr(config, 'epf_pay_admin_edli', True)
     # Month-days basis for the LOP columns (mirrors payroll lop_divisor)
     _lb = getattr(config, 'lop_divisor', 'calendar') or 'calendar'
     if _lb in ('26', '30'):
@@ -2885,6 +2889,7 @@ def _build_client_statement_data(payroll_id):
     summary = {
         'gross': 0, 'ot_amt': 0, 'nph': 0,
         'epf_ee': 0, 'epf_ac01': 0, 'epf_eps': 0, 'epf_edli': 0, 'epf_admin': 0, 'epf_er': 0,
+        'epf_welfare': 0,
         'esic_ee': 0, 'esic_er': 0, 'pt': 0, 'adv': 0, 'total_ded': 0, 'net': 0,
         'ctc': 0, 'count': 0,
         'head_totals': {},
@@ -2897,8 +2902,16 @@ def _build_client_statement_data(payroll_id):
         rate = (entry._daily_rate if is_daily and getattr(entry, '_daily_rate', 0)
                 else (getattr(entry, '_effective_gross', 0) or entry.gross_salary or 0))
 
-        epf_er = round((entry.epf_ac01 or 0) + (entry.epf_eps or 0)
-                       + (entry.epf_edli or 0) + (entry.epf_admin or 0))
+        # EDLI + Admin (the 1%) — always paid; bundled into the employer share /
+        # CTC in 13% mode, shown as a SEPARATE establishment welfare liability in
+        # 12% mode (so the CTC then carries only A/c 01 + EPS = 12%).
+        _edli_admin = round((entry.epf_edli or 0) + (entry.epf_admin or 0))
+        if _epf_13:
+            epf_er = round((entry.epf_ac01 or 0) + (entry.epf_eps or 0)) + _edli_admin
+            epf_welfare = 0
+        else:
+            epf_er = round((entry.epf_ac01 or 0) + (entry.epf_eps or 0))
+            epf_welfare = _edli_admin
         esic_er = round(entry.esic_employer or 0)
         gross = round(entry.total_earnings or 0)
         adv = round(entry.other_deduction or 0)
@@ -2937,6 +2950,7 @@ def _build_client_statement_data(payroll_id):
             'epf_edli': round(entry.epf_edli or 0),
             'epf_admin': round(entry.epf_admin or 0),
             'epf_er': epf_er,
+            'epf_welfare': epf_welfare,
             'esic_ee': round(entry.esic_employee or 0),
             'esic_er': esic_er,
             'pt': round(entry.professional_tax or 0),
@@ -2948,7 +2962,8 @@ def _build_client_statement_data(payroll_id):
         rows.append(row)
 
         for k in ('ot_amt', 'nph', 'gross', 'epf_ee', 'epf_ac01', 'epf_eps', 'epf_edli',
-                  'epf_admin', 'epf_er', 'esic_ee', 'esic_er', 'pt', 'adv', 'total_ded', 'net', 'ctc'):
+                  'epf_admin', 'epf_er', 'epf_welfare', 'esic_ee', 'esic_er', 'pt', 'adv',
+                  'total_ded', 'net', 'ctc'):
             summary[k] += row[k]
         summary['count'] += 1
 
@@ -3212,14 +3227,17 @@ def _generate_client_statement_excel(payroll, est, config, heads, rows, summary,
             p += 1
         p += 1
 
-    _panel(f"EPF PAYABLE SUMMARY ({summary.get('epf_employer_pct', 13)}% EMPLOYER)", [
+    _epf_rows = [
         ('Employee Share (A/c 1 — 12%)', summary['epf_ee']),
         ('Employer EPF (A/c 1 — 3.67%)', summary['epf_ac01']),
         ('Employer EPS (A/c 10 — 8.33%)', summary['epf_eps']),
         ('EDLI (A/c 21 — 0.50%)', summary['epf_edli']),
-        ('Admin Charges (A/c 2 — 0.50%)', summary['epf_admin']),
-        ('TOTAL EPF CHALLAN', summary['epf_challan']),
-    ], '1E40AF')
+        ('Admin Charges (A/c 2 — 0.50%, min 500)', summary['epf_admin']),
+        ('TOTAL EPF CHALLAN (25%)', summary['epf_challan']),
+    ]
+    if summary.get('epf_welfare'):
+        _epf_rows.append(('  of which Establishment Welfare Liability (1% EDLI+Admin)', summary['epf_welfare']))
+    _panel('EPF PAYABLE SUMMARY (25% CHALLAN)', _epf_rows, '1E40AF')
 
     _panel('ESIC PAYABLE SUMMARY', [
         ('Employee Share (0.75%)', summary['esic_ee']),
@@ -3245,7 +3263,12 @@ def _generate_client_statement_excel(payroll, est, config, heads, rows, summary,
     # Client cash-flow (where the money actually goes this month)
     _cash = [
         ('Net Salary to Employees', summary['net']),
-        (f"EPF Challan (to EPFO) — {summary.get('epf_employer_pct', 13)}% employer", summary['epf_challan']),
+        ('EPF Challan (to EPFO) — 25%', summary['epf_challan']),
+    ]
+    if summary.get('epf_welfare'):
+        _cash.append(('  of which Employee + Employer in CTC (24%)', summary['epf_ee'] + summary['epf_er']))
+        _cash.append(('  of which Establishment Welfare Liability (1% EDLI+Admin)', summary['epf_welfare']))
+    _cash += [
         ('ESIC Challan (to ESIC)', summary['esic_challan']),
         ('Professional Tax (to Govt)', summary['pt']),
         (f"Professional Fee ({summary.get('fee_type', 'Monthly')})", summary.get('professional_fee', 0)),
