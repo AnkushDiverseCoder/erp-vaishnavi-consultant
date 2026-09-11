@@ -169,7 +169,7 @@
     <!-- Payable Summary Panels -->
     <div class="cs-summary">
         <div class="cs-card">
-            <div class="cs-head" style="background:#1E40AF;">EPF Payable Summary</div>
+            <div class="cs-head" style="background:#1E40AF;">EPF Payable Summary ({{ summary.epf_employer_pct }}% employer)</div>
             <table>
                 <tr><td>Employee Share (A/c 1 — 12%)</td><td class="v">{{ "{:,.0f}".format(summary.epf_ee) }}</td></tr>
                 <tr><td>Employer EPF (A/c 1 — 3.67%)</td><td class="v">{{ "{:,.0f}".format(summary.epf_ac01) }}</td></tr>
@@ -213,7 +213,7 @@
             <div class="cs-head" style="background:#166534;">Client Cash-Flow Summary</div>
             <table>
                 <tr><td>Net Salary to Employees</td><td class="v">{{ "{:,.0f}".format(summary.net) }}</td></tr>
-                <tr><td>EPF Challan (to EPFO)</td><td class="v">{{ "{:,.0f}".format(summary.epf_challan) }}</td></tr>
+                <tr><td>EPF Challan (to EPFO) — {{ summary.epf_employer_pct }}% employer</td><td class="v">{{ "{:,.0f}".format(summary.epf_challan) }}</td></tr>
                 <tr><td>ESIC Challan (to ESIC)</td><td class="v">{{ "{:,.0f}".format(summary.esic_challan) }}</td></tr>
                 <tr><td>Professional Tax (to Govt)</td><td class="v">{{ "{:,.0f}".format(summary.pt) }}</td></tr>
                 <tr><td>Professional Fee ({{ summary.fee_type }})</td><td class="v">{{ "{:,.0f}".format(summary.professional_fee) }}</td></tr>

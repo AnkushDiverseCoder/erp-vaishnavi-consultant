@@ -151,6 +151,11 @@ class PayrollConfig(db.Model):
     epf_admin_rate = db.Column(db.Float, default=0.50)      # Admin Charge (min ₹500)
     epf_edli_rate = db.Column(db.Float, default=0.50)       # EDLI Contribution
     epf_admin_min = db.Column(db.Float, default=500.0)      # Minimum Admin Charge
+    # Employer EPF share choice:
+    #   True  (default) = 13% — pays EDLI (0.5%) + Admin (0.5%) on top of 12%
+    #   False           = 12% — employer pays only A/c 01 (3.67%) + EPS (8.33%),
+    #                     no EDLI / Admin (some establishments opt for this)
+    epf_pay_admin_edli = db.Column(db.Boolean, default=True)
     # EPF wage ceiling (default 15000 — statutory limit)
     epf_wage_ceiling = db.Column(db.Float, default=15000.0)
     # Include employer share in CTC? (some clients do)

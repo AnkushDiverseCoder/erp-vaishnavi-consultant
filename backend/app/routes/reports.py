@@ -2956,6 +2956,8 @@ def _build_client_statement_data(payroll_id):
     summary['epf_challan'] = (summary['epf_ee'] + summary['epf_ac01'] + summary['epf_eps']
                               + summary['epf_edli'] + summary['epf_admin'])
     summary['esic_challan'] = summary['esic_ee'] + summary['esic_er']
+    # Employer EPF share mode (13% with EDLI+Admin, or 12% without)
+    summary['epf_employer_pct'] = 13 if getattr(config, 'epf_pay_admin_edli', True) else 12
 
     # ── Professional (consultant) fee + client cash-flow ──
     # Fee actually charged for THIS filing month (Monthly → every month;
@@ -3210,7 +3212,7 @@ def _generate_client_statement_excel(payroll, est, config, heads, rows, summary,
             p += 1
         p += 1
 
-    _panel('EPF PAYABLE SUMMARY', [
+    _panel(f"EPF PAYABLE SUMMARY ({summary.get('epf_employer_pct', 13)}% EMPLOYER)", [
         ('Employee Share (A/c 1 — 12%)', summary['epf_ee']),
         ('Employer EPF (A/c 1 — 3.67%)', summary['epf_ac01']),
         ('Employer EPS (A/c 10 — 8.33%)', summary['epf_eps']),
@@ -3243,7 +3245,7 @@ def _generate_client_statement_excel(payroll, est, config, heads, rows, summary,
     # Client cash-flow (where the money actually goes this month)
     _cash = [
         ('Net Salary to Employees', summary['net']),
-        ('EPF Challan (to EPFO)', summary['epf_challan']),
+        (f"EPF Challan (to EPFO) — {summary.get('epf_employer_pct', 13)}% employer", summary['epf_challan']),
         ('ESIC Challan (to ESIC)', summary['esic_challan']),
         ('Professional Tax (to Govt)', summary['pt']),
         (f"Professional Fee ({summary.get('fee_type', 'Monthly')})", summary.get('professional_fee', 0)),
