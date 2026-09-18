@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}EPF Form 9 (Revised) - {{ payroll.period_display }}{% endblock %}
+{% block page_header %}EPF Form 9 (Revised) — Register of Employees{% endblock %}
+{% block content %}
+{% set print_size = 'legal-landscape' %}
+{% include '_print_common.html' %}
+<style>
+  @media print { .page-content{padding:0!important;} .epf-page{box-shadow:none!important;border:none!important;margin:0!important;padding:6px!important;} .epf-table th,.epf-table td{font-size:8px!important;padding:3px 4px!important;} }
+  .epf-page{background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:20px;margin-bottom:20px;box-shadow:0 1px 3px rgba(0,0,0,.1);overflow-x:auto;}
+  .epf-title{text-align:center;margin-bottom:6px;}
+  .epf-title h3{font-size:1.15rem;font-weight:800;margin:0;letter-spacing:1px;}
+  .epf-title p{font-size:.75rem;font-style:italic;margin:2px 0;color:#475569;}
+  .epf-info{font-size:.8rem;margin:8px 0;color:#334155;}
+  .epf-table{width:100%;border-collapse:collapse;font-size:.72rem;margin-top:6px;}
+  .epf-table th,.epf-table td{border:1px solid #94a3b8;padding:4px 5px;text-align:center;vertical-align:middle;}
+  .epf-table th{background:#1e40af;color:#fff;font-size:.68rem;}
+  .epf-table td.l{text-align:left;}
+  .epf-table tr.left td{background:#fef2f2;}
+  .sign{margin-top:24px;text-align:right;font-size:.8rem;font-weight:700;}
+</style>
+<div class="no-print mb-3 d-flex justify-content-between align-items-center">
+  <nav aria-label="breadcrumb"><ol class="breadcrumb" style="font-size:.85rem;margin:0;">
+    <li class="breadcrumb-item"><a href="{{ url_for('payroll.payroll_list') }}" class="text-decoration-none">Salary Processing</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('payroll.payroll_process', payroll_id=payroll.id) }}" class="text-decoration-none">{{ payroll.period_display }}</a></li>
+    <li class="breadcrumb-item active">EPF Form 9 (Revised)</li>
+  </ol></nav>
+  <div class="d-flex gap-2">
+    <a href="{{ url_for('reports.form9_excel', payroll_id=payroll.id) }}" class="btn btn-success btn-sm"><i class="bi bi-file-earmark-excel me-1"></i> Download Excel</a>
+    <button onclick="window.history.back()" style="background:#e5e7eb;color:#333;border:none;padding:6px 16px;border-radius:6px;cursor:pointer;font-size:.82rem;"><i class="bi bi-arrow-left me-1"></i> Back</button>
+    <button onclick="window.print()" class="btn btn-primary btn-sm"><i class="bi bi-printer me-1"></i> Print / PDF</button>
+  </div>
+</div>
+<div class="epf-page">
+  <div class="epf-title"><h3>FORM 9 (REVISED)</h3><p>Register of Employees [Para 36]</p></div>
+  <div class="epf-info">
+    <b>Name &amp; Address of Establishment:</b> {{ est.company_name }}{% if est.address %}, {{ est.address }}{% endif %}<br>
+    <b>Code No.:</b> {{ est.pf_code or '—' }} &nbsp;|&nbsp; <b>As on:</b> {{ payroll.month_name }} {{ payroll.year }} &nbsp;|&nbsp; <b>Total Employees:</b> {{ register|length }}
+  </div>
+  <table class="epf-table">
+    <thead><tr>
+      <th style="width:30px;">Sl.<br>No.</th><th>UAN / Account No.</th><th>Name of the Employee</th>
+      <th>Father's / Husband's Name</th><th>Rel.</th><th>Date of Birth</th><th>Sex</th>
+      <th>Date of Joining</th><th>Designation</th><th>Date of Exit</th><th>Status</th>
+    </tr></thead>
+    <tbody>
+      {% for e in register %}
+      <tr class="{% if e.date_of_exit %}left{% endif %}">
+        <td>{{ loop.index }}</td><td>{{ e.uan_number or '—' }}</td><td class="l">{{ e.name }}</td>
+        <td class="l">{{ e.father_husband_name or '' }}</td><td>{{ e.relation or '' }}</td>
+        <td>{{ e.date_of_birth.strftime('%d-%m-%Y') if e.date_of_birth else '' }}</td>
+        <td>{{ e.gender or '' }}</td>
+        <td>{{ e.date_of_joining.strftime('%d-%m-%Y') if e.date_of_joining else '' }}</td>
+        <td class="l">{{ e.designation or '' }}</td>
+        <td>{{ e.date_of_exit.strftime('%d-%m-%Y') if e.date_of_exit else '—' }}</td>
+        <td>{% if e.date_of_exit %}Left{% else %}Active{% endif %}</td>
+      </tr>
+      {% else %}
+      <tr><td class="l" colspan="11">NIL — no employees on record</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <div class="sign">Signature of the Employer / Authorised Signatory</div>
+  <div style="margin-top:14px;font-size:.68rem;color:#94a3b8;">Generated: {{ generated_on }} &nbsp;|&nbsp; Vaishnavi Consultant</div>
+</div>
+{% endblock %}

@@ -474,6 +474,22 @@
                     <i class="bi bi-file-earmark-spreadsheet"></i>
                 </a>
             </div>
+            <!-- EPF Manual Forms (5/10/12A/9) -->
+            <div class="btn-group">
+                <button type="button" class="btn btn-outline-info btn-sm dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                    <i class="bi bi-journal-text me-1"></i> EPF Forms (5/10/12A/9)
+                </button>
+                <ul class="dropdown-menu">
+                    <li><a class="dropdown-item" href="{{ url_for('reports.form5_10_view', payroll_id=payroll.id) }}" target="_blank"><i class="bi bi-person-plus me-2"></i>Form 5 &amp; 10 — Joiners / Leavers</a></li>
+                    <li><a class="dropdown-item" href="{{ url_for('reports.form5_10_excel', payroll_id=payroll.id) }}"><i class="bi bi-file-earmark-excel me-2"></i>Form 5 &amp; 10 — Excel</a></li>
+                    <li><hr class="dropdown-divider"></li>
+                    <li><a class="dropdown-item" href="{{ url_for('reports.form12a_view', payroll_id=payroll.id) }}" target="_blank"><i class="bi bi-clipboard-check me-2"></i>Form 12A — Monthly Statement</a></li>
+                    <li><a class="dropdown-item" href="{{ url_for('reports.form12a_excel', payroll_id=payroll.id) }}"><i class="bi bi-file-earmark-excel me-2"></i>Form 12A — Excel</a></li>
+                    <li><hr class="dropdown-divider"></li>
+                    <li><a class="dropdown-item" href="{{ url_for('reports.form9_view', payroll_id=payroll.id) }}" target="_blank"><i class="bi bi-people me-2"></i>Form 9 (Revised) — Register</a></li>
+                    <li><a class="dropdown-item" href="{{ url_for('reports.form9_excel', payroll_id=payroll.id) }}"><i class="bi bi-file-earmark-excel me-2"></i>Form 9 (Revised) — Excel</a></li>
+                </ul>
+            </div>
             {% endif %}
             {% if config.esic_applicable %}
             <!-- ESIC Template -->

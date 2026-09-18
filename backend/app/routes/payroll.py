@@ -148,7 +148,15 @@ def payroll_config(est_id):
                 config.epf_admin_rate = float(request.form.get('epf_admin_rate', 0.50))
                 config.epf_edli_rate = float(request.form.get('epf_edli_rate', 0.50))
                 config.epf_admin_min = float(request.form.get('epf_admin_min', 500))
-                config.epf_wage_ceiling = float(request.form.get('epf_wage_ceiling', 15000))
+                # EPF wage-ceiling regime: old ₹15,000 / new ₹25,000 / custom
+                _regime = request.form.get('epf_ceiling_regime', 'old')
+                config.epf_ceiling_regime = _regime if _regime in ('old', 'new', 'custom') else 'old'
+                if _regime == 'old':
+                    config.epf_wage_ceiling = 15000.0
+                elif _regime == 'new':
+                    config.epf_wage_ceiling = 25000.0
+                else:  # custom — honour the entered value
+                    config.epf_wage_ceiling = float(request.form.get('epf_wage_ceiling', 15000))
             except ValueError:
                 pass
             config.epf_employer_in_ctc = 'epf_employer_in_ctc' in request.form

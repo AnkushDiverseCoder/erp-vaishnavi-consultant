@@ -855,6 +855,8 @@ def _auto_migrate_columns(db):
         "ALTER TABLE payroll_configs ADD COLUMN IF NOT EXISTS wage_payment_day INTEGER",
         # EPF employer 12% vs 13% choice (pay EDLI + Admin on top of 12% or not)
         "ALTER TABLE payroll_configs ADD COLUMN IF NOT EXISTS epf_pay_admin_edli BOOLEAN DEFAULT TRUE",
+        # EPF wage-ceiling regime: 'old' ₹15,000 / 'new' ₹25,000 / 'custom'
+        "ALTER TABLE payroll_configs ADD COLUMN IF NOT EXISTS epf_ceiling_regime VARCHAR(10) NOT NULL DEFAULT 'old'",
         # Manual "Loss of Pay" system (per-establishment toggle + two manual day counts)
         "ALTER TABLE payroll_configs ADD COLUMN IF NOT EXISTS lop_system_enabled BOOLEAN DEFAULT FALSE",
         "ALTER TABLE payroll_entries ADD COLUMN IF NOT EXISTS lop_days DOUBLE PRECISION DEFAULT 0",

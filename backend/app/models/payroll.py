@@ -158,6 +158,13 @@ class PayrollConfig(db.Model):
     epf_pay_admin_edli = db.Column(db.Boolean, default=True)
     # EPF wage ceiling (default 15000 — statutory limit)
     epf_wage_ceiling = db.Column(db.Float, default=15000.0)
+    # Ceiling regime selector (flexibility for the 2026 revision ₹15,000 → ₹25,000):
+    #   'old'    = ₹15,000 (pre-17-Sep-2026)
+    #   'new'    = ₹25,000 (Gazette S.O. 5109(E) dated 17-Sep-2026)
+    #   'custom' = use whatever epf_wage_ceiling is set to
+    # Default 'old' so every existing establishment stays unchanged until the
+    # user opts in.
+    epf_ceiling_regime = db.Column(db.String(10), nullable=False, default='old')
     # Include employer share in CTC? (some clients do)
     epf_employer_in_ctc = db.Column(db.Boolean, default=False)
 

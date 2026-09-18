@@ -549,9 +549,17 @@
                         <small class="text-muted">Higher = EPF on actual wages, no ceiling cap</small>
                     </div>
                     <div class="col-md-4" id="epfCeilingDiv" style="display:{% if config and config.epf_contribution_type == 'higher' %}none{% else %}block{% endif %};">
-                        <label class="form-label" style="font-size:0.8rem;">EPF Wage Ceiling (₹)</label>
-                        <input type="number" name="epf_wage_ceiling" class="form-control form-control-sm"
-                               value="{{ config.epf_wage_ceiling if config else 15000 }}">
+                        <label class="form-label" style="font-size:0.8rem;">EPF Wage Ceiling Regime</label>
+                        <select name="epf_ceiling_regime" class="form-select form-select-sm" id="epfCeilingRegime" onchange="toggleEpfCeilingCustom()">
+                            <option value="old" {% if not config or config.epf_ceiling_regime == 'old' %}selected{% endif %}>Old Regime — ₹15,000</option>
+                            <option value="new" {% if config and config.epf_ceiling_regime == 'new' %}selected{% endif %}>New Regime — ₹25,000 (w.e.f. 17-Sep-2026)</option>
+                            <option value="custom" {% if config and config.epf_ceiling_regime == 'custom' %}selected{% endif %}>Custom amount</option>
+                        </select>
+                        <input type="number" name="epf_wage_ceiling" id="epfWageCeiling" class="form-control form-control-sm mt-1"
+                               value="{{ config.epf_wage_ceiling if config else 15000 }}"
+                               style="display:{% if config and config.epf_ceiling_regime == 'custom' %}block{% else %}none{% endif %};"
+                               placeholder="Enter custom ceiling ₹">
+                        <small class="text-muted">Gazette S.O. 5109(E) raised the ceiling ₹15,000 → ₹25,000. Pick a regime or enter a custom value.</small>
                     </div>
                     <div class="col-md-4 d-flex align-items-end">
                         <div class="form-check" style="padding:6px 0;">
@@ -736,6 +744,13 @@
     function toggleEpfCeiling() {
         document.getElementById('epfCeilingDiv').style.display =
             document.getElementById('epfContribType').value === 'higher' ? 'none' : 'block';
+    }
+    function toggleEpfCeilingCustom() {
+        var r = document.getElementById('epfCeilingRegime').value;
+        var box = document.getElementById('epfWageCeiling');
+        box.style.display = (r === 'custom') ? 'block' : 'none';
+        if (r === 'old') box.value = 15000;
+        else if (r === 'new') box.value = 25000;
     }
     function toggleESIC() {
         document.getElementById('esicSettings').style.display =

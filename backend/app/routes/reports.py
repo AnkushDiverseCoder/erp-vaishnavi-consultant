@@ -97,6 +97,12 @@ QUICK_REPORT_TYPES = [
     ('epf_ecr_csv',      'EPF ECR (CSV)',                      'reports.epf_ecr_csv',              'EPF / ESIC'),
     ('esic_view',        'ESIC Contribution (View)',           'reports.esic_view',                'EPF / ESIC'),
     ('esic_excel',       'ESIC Contribution (Excel)',          'reports.esic_excel',               'EPF / ESIC'),
+    ('epf_form5_10_view','EPF Form 5 & 10 — Joiners/Leavers (View)', 'reports.form5_10_view',       'EPF / ESIC'),
+    ('epf_form5_10_excel','EPF Form 5 & 10 (Excel)',           'reports.form5_10_excel',           'EPF / ESIC'),
+    ('epf_form12a_view', 'EPF Form 12A — Monthly Statement (View)',   'reports.form12a_view',        'EPF / ESIC'),
+    ('epf_form12a_excel','EPF Form 12A (Excel)',               'reports.form12a_excel',            'EPF / ESIC'),
+    ('epf_form9_view',   'EPF Form 9 (Revised) — Register (View)',    'reports.form9_view',          'EPF / ESIC'),
+    ('epf_form9_excel',  'EPF Form 9 (Revised) (Excel)',       'reports.form9_excel',              'EPF / ESIC'),
     # Payslips
     ('payslip_xix',      'Payslip — Form XIX',                 'reports.payslip_form_xix',         'Payslips'),
     ('payslip_pro',      'Payslip — Professional',             'reports.payslip_professional',     'Payslips'),
@@ -2848,6 +2854,330 @@ def _generate_form_b_excel(payroll, est, config, entries, rows, head_map):
     wb.save(output)
     output.seek(0)
     return output
+
+
+# ============================================================
+# EPF Statutory Registers — Form 5, Form 10, Form 12A, Form 9 (Revised)
+# ------------------------------------------------------------
+# Some EPF offices now ask these to be submitted manually, so we generate
+# them as print-ready (Legal) HTML views plus Excel downloads:
+#   • Form 5           — employees who JOINED (qualified) during the month
+#   • Form 10          — members who LEFT service during the month
+#   • Form 12A         — monthly Statement of Contributions (account-wise)
+#   • Form 9 (Revised) — Register of Employees (full master register)
+# ============================================================
+
+def _epf_forms_data(payroll_id):
+    """Fetch establishment + joiners (Form 5), leavers (Form 10) and the full
+    employee register (Form 9) for the payroll month."""
+    import calendar as _cal
+    from datetime import date as _date
+    payroll = MonthlyPayroll.query.get_or_404(payroll_id)
+    est = payroll.establishment
+    verify_est_ownership(est)
+    config = PayrollConfig.query.filter_by(establishment_id=est.id).first()
+
+    last_day = _cal.monthrange(payroll.year, payroll.month)[1]
+    m_start = _date(payroll.year, payroll.month, 1)
+    m_end = _date(payroll.year, payroll.month, last_day)
+
+    joiners = Employee.query.filter(
+        Employee.establishment_id == est.id,
+        Employee.date_of_joining >= m_start,
+        Employee.date_of_joining <= m_end,
+    ).order_by(Employee.date_of_joining, Employee.name).all()
+
+    leavers = Employee.query.filter(
+        Employee.establishment_id == est.id,
+        Employee.date_of_exit.isnot(None),
+        Employee.date_of_exit >= m_start,
+        Employee.date_of_exit <= m_end,
+    ).order_by(Employee.date_of_exit, Employee.name).all()
+
+    register = Employee.query.filter(
+        Employee.establishment_id == est.id,
+    ).order_by(Employee.date_of_joining, Employee.name).all()
+
+    return payroll, est, config, joiners, leavers, register
+
+
+# ─────────────────────────────  FORM 5 & FORM 10  ─────────────────────────────
+@reports_bp.route('/payroll/<int:payroll_id>/report/epf-form5-10')
+def form5_10_view(payroll_id):
+    """EPF Form 5 (joiners) & Form 10 (leavers) — combined print view."""
+    payroll, est, config, joiners, leavers, _ = _epf_forms_data(payroll_id)
+    generated_on = datetime.now().strftime('%d %b %Y, %I:%M %p')
+    return render_template('reports/epf_form5_10.html', payroll=payroll, est=est, config=config,
+                           joiners=joiners, leavers=leavers, generated_on=generated_on)
+
+
+@reports_bp.route('/payroll/<int:payroll_id>/report/epf-form5-10/excel')
+def form5_10_excel(payroll_id):
+    payroll, est, config, joiners, leavers, _ = _epf_forms_data(payroll_id)
+    output = _generate_form5_10_excel(payroll, est, config, joiners, leavers)
+    filename = f"EPF_Form5-10_{short_est_code(est.company_name)}_{calendar.month_abbr[payroll.month]}{payroll.year}.xlsx"
+    return send_file(output, as_attachment=True, download_name=filename,
+                     mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
+
+# ─────────────────────────────────  FORM 12A  ─────────────────────────────────
+@reports_bp.route('/payroll/<int:payroll_id>/report/epf-form12a')
+def form12a_view(payroll_id):
+    """EPF Form 12A — monthly Statement of Contributions."""
+    payroll, est, config, rows, totals = _build_monthly_compliance(payroll_id)
+    _, _, _, joiners, leavers, _ = _epf_forms_data(payroll_id)
+    epf_members = sum(1 for r in rows if (r['entry'].epf_employee or 0) > 0)
+    f12 = _form12a_figures(totals)
+    generated_on = datetime.now().strftime('%d %b %Y, %I:%M %p')
+    return render_template('reports/epf_form12a.html', payroll=payroll, est=est, config=config,
+                           totals=totals, f12=f12, epf_members=epf_members,
+                           joined=len(joiners), left=len(leavers), generated_on=generated_on)
+
+
+@reports_bp.route('/payroll/<int:payroll_id>/report/epf-form12a/excel')
+def form12a_excel(payroll_id):
+    payroll, est, config, rows, totals = _build_monthly_compliance(payroll_id)
+    _, _, _, joiners, leavers, _ = _epf_forms_data(payroll_id)
+    epf_members = sum(1 for r in rows if (r['entry'].epf_employee or 0) > 0)
+    f12 = _form12a_figures(totals)
+    output = _generate_form12a_excel(payroll, est, config, f12, epf_members, len(joiners), len(leavers))
+    filename = f"EPF_Form12A_{short_est_code(est.company_name)}_{calendar.month_abbr[payroll.month]}{payroll.year}.xlsx"
+    return send_file(output, as_attachment=True, download_name=filename,
+                     mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
+
+def _form12a_figures(totals):
+    """Account-wise EPF figures for Form 12A (all rounded whole rupees)."""
+    ac01_ee = round(totals['epf_ee'])         # Employee 12% (A/c 01)
+    ac01_er = round(totals['epf_ac01'])        # Employer 3.67% (A/c 01)
+    ac10 = round(totals['epf_eps'])            # EPS 8.33% (A/c 10)
+    ac02 = round(totals['epf_admin'])          # Admin 0.5% (A/c 02)
+    ac21 = round(totals['epf_edli'])           # EDLI 0.5% (A/c 21)
+    ac22 = 0                                    # EDLI Admin (A/c 22) — nil
+    return {
+        'epf_wages': round(totals['epf_wages']),
+        'eps_wages': round(totals['epf_wages']),
+        'edli_wages': round(totals['epf_wages']),
+        'ac01_ee': ac01_ee, 'ac01_er': ac01_er, 'ac01_total': ac01_ee + ac01_er,
+        'ac10': ac10, 'ac02': ac02, 'ac21': ac21, 'ac22': ac22,
+        'grand_total': ac01_ee + ac01_er + ac10 + ac02 + ac21 + ac22,
+    }
+
+
+# ─────────────────────────────  FORM 9 (REVISED)  ─────────────────────────────
+@reports_bp.route('/payroll/<int:payroll_id>/report/epf-form9')
+def form9_view(payroll_id):
+    """EPF Form 9 (Revised) — Register of Employees (full master register)."""
+    payroll, est, config, _, _, register = _epf_forms_data(payroll_id)
+    generated_on = datetime.now().strftime('%d %b %Y, %I:%M %p')
+    return render_template('reports/epf_form9.html', payroll=payroll, est=est, config=config,
+                           register=register, generated_on=generated_on)
+
+
+@reports_bp.route('/payroll/<int:payroll_id>/report/epf-form9/excel')
+def form9_excel(payroll_id):
+    payroll, est, config, _, _, register = _epf_forms_data(payroll_id)
+    output = _generate_form9_excel(payroll, est, config, register)
+    filename = f"EPF_Form9_{short_est_code(est.company_name)}_{calendar.month_abbr[payroll.month]}{payroll.year}.xlsx"
+    return send_file(output, as_attachment=True, download_name=filename,
+                     mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
+
+# ─────────────────────────────  Excel generators  ────────────────────────────
+def _epf_excel_header(ws, est, title, subtitle, month_line, ncols):
+    from openpyxl.styles import Font, Alignment, PatternFill
+    from openpyxl.utils import get_column_letter
+    last = get_column_letter(ncols)
+    ws.merge_cells(f'A1:{last}1'); ws['A1'] = title
+    ws['A1'].font = Font(name='Arial', size=14, bold=True); ws['A1'].alignment = Alignment(horizontal='center')
+    ws.merge_cells(f'A2:{last}2'); ws['A2'] = subtitle
+    ws['A2'].font = Font(name='Arial', size=9, italic=True); ws['A2'].alignment = Alignment(horizontal='center')
+    ws.merge_cells(f'A4:{last}4'); ws['A4'] = f'Name & Address of the Establishment: {est.company_name}' + (f', {est.address}' if est.address else '')
+    ws['A4'].font = Font(name='Arial', size=10, bold=True)
+    ws.merge_cells(f'A5:{last}5'); ws['A5'] = f'Code No. of the Establishment: {est.pf_code or "—"}     |     {month_line}'
+    ws['A5'].font = Font(name='Arial', size=10, bold=True)
+
+
+def _epf_table(ws, start_row, headers, widths, rows_data):
+    from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
+    from openpyxl.utils import get_column_letter
+    thin = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
+    hfill = PatternFill('solid', fgColor='1E40AF')
+    for i, w in enumerate(widths, 1):
+        ws.column_dimensions[get_column_letter(i)].width = w
+    for i, h in enumerate(headers, 1):
+        c = ws.cell(row=start_row, column=i, value=h)
+        c.font = Font(name='Arial', size=9, bold=True, color='FFFFFF')
+        c.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+        c.border = thin; c.fill = hfill
+    ws.row_dimensions[start_row].height = 30
+    r = start_row + 1
+    for rowvals in rows_data:
+        for i, v in enumerate(rowvals, 1):
+            c = ws.cell(row=r, column=i, value=v)
+            c.font = Font(name='Arial', size=9)
+            c.alignment = Alignment(horizontal='left' if i in (3, 4) else 'center', vertical='center')
+            c.border = thin
+        r += 1
+    return r
+
+
+def _d(d):
+    return d.strftime('%d-%m-%Y') if d else ''
+
+
+def _generate_form5_10_excel(payroll, est, config, joiners, leavers):
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, Alignment
+    from openpyxl.worksheet.page import PageMargins
+    from openpyxl.worksheet.properties import PageSetupProperties
+    wb = Workbook()
+    # Form 5
+    ws = wb.active; ws.title = 'Form 5'
+    _epf_excel_header(ws, est, 'FORM 5',
+                      'Return of Employees qualifying for membership of the EPF & EPS for the FIRST time  [Para 36(2)(a)]',
+                      f'Month: {payroll.month_name} {payroll.year}', 9)
+    h5 = ['Sl.\nNo.', 'UAN / Account No.', 'Name of the Employee', "Father's / Husband's Name",
+          'Date of\nBirth', 'Sex', 'Date of\nJoining', 'Previous\nService', 'Remarks']
+    w5 = [5, 18, 26, 26, 13, 8, 13, 12, 16]
+    data5 = [[i, e.uan_number or '', e.name, e.father_husband_name or '', _d(e.date_of_birth),
+              e.gender or '', _d(e.date_of_joining), '', ''] for i, e in enumerate(joiners, 1)]
+    if not data5:
+        data5 = [['', '', 'NIL — no employee joined during the month', '', '', '', '', '', '']]
+    endr = _epf_table(ws, 7, h5, w5, data5)
+    ws.cell(row=endr + 2, column=2, value='Signature of the Employer / Authorised Signatory').font = Font(name='Arial', size=9, bold=True)
+    ws.page_setup.orientation = 'landscape'; ws.page_setup.paperSize = 5
+    ws.page_setup.fitToWidth = 1; ws.page_setup.fitToHeight = 0
+    ws.sheet_properties.pageSetUpPr = PageSetupProperties(fitToPage=True)
+    ws.page_margins = PageMargins(left=0.4, right=0.3, top=0.4, bottom=0.4)
+
+    # Form 10
+    ws2 = wb.create_sheet('Form 10')
+    _epf_excel_header(ws2, est, 'FORM 10',
+                      'Return of Members leaving service during the month  [Para 36(2)(b) & (c)]',
+                      f'Month: {payroll.month_name} {payroll.year}', 7)
+    h10 = ['Sl.\nNo.', 'UAN / Account No.', 'Name of the Member', "Father's / Husband's Name",
+           'Date of Leaving\nService', 'Reason for\nLeaving', 'Remarks']
+    w10 = [5, 18, 28, 28, 15, 16, 16]
+    data10 = [[i, e.uan_number or '', e.name, e.father_husband_name or '', _d(e.date_of_exit),
+               e.exit_reason or '', ''] for i, e in enumerate(leavers, 1)]
+    if not data10:
+        data10 = [['', '', 'NIL — no member left service during the month', '', '', '', '']]
+    endr2 = _epf_table(ws2, 7, h10, w10, data10)
+    ws2.cell(row=endr2 + 2, column=2, value='Signature of the Employer / Authorised Signatory').font = Font(name='Arial', size=9, bold=True)
+    ws2.page_setup.orientation = 'landscape'; ws2.page_setup.paperSize = 5
+    ws2.page_setup.fitToWidth = 1; ws2.page_setup.fitToHeight = 0
+    ws2.sheet_properties.pageSetUpPr = PageSetupProperties(fitToPage=True)
+    ws2.page_margins = PageMargins(left=0.4, right=0.3, top=0.4, bottom=0.4)
+
+    output = io.BytesIO(); wb.save(output); output.seek(0)
+    return output
+
+
+def _generate_form9_excel(payroll, est, config, register):
+    from openpyxl import Workbook
+    from openpyxl.styles import Font
+    from openpyxl.worksheet.page import PageMargins
+    from openpyxl.worksheet.properties import PageSetupProperties
+    wb = Workbook(); ws = wb.active; ws.title = 'Form 9 (Revised)'
+    _epf_excel_header(ws, est, 'FORM 9 (REVISED)',
+                      'Register of Employees  [Para 36]',
+                      f'As on: {payroll.month_name} {payroll.year}', 11)
+    h = ['Sl.\nNo.', 'UAN / Account No.', 'Name of the Employee', "Father's / Husband's Name",
+         'Rel.', 'Date of\nBirth', 'Sex', 'Date of\nJoining', 'Designation', 'Date of\nExit', 'Remarks']
+    w = [5, 17, 24, 24, 8, 12, 8, 12, 16, 12, 14]
+    data = [[i, e.uan_number or '', e.name, e.father_husband_name or '', (e.relation or ''),
+             _d(e.date_of_birth), e.gender or '', _d(e.date_of_joining), e.designation or '',
+             _d(e.date_of_exit), ('Left' if e.date_of_exit else 'Active')] for i, e in enumerate(register, 1)]
+    if not data:
+        data = [['', '', 'NIL — no employees on record', '', '', '', '', '', '', '', '']]
+    endr = _epf_table(ws, 7, h, w, data)
+    ws.cell(row=endr + 2, column=2, value='Signature of the Employer / Authorised Signatory').font = Font(name='Arial', size=9, bold=True)
+    ws.page_setup.orientation = 'landscape'; ws.page_setup.paperSize = 5
+    ws.page_setup.fitToWidth = 1; ws.page_setup.fitToHeight = 0
+    ws.sheet_properties.pageSetUpPr = PageSetupProperties(fitToPage=True)
+    ws.print_title_rows = '7:7'
+    ws.page_margins = PageMargins(left=0.4, right=0.3, top=0.4, bottom=0.4)
+    output = io.BytesIO(); wb.save(output); output.seek(0)
+    return output
+
+
+def _generate_form12a_excel(payroll, est, config, f12, epf_members, joined, left):
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
+    from openpyxl.worksheet.page import PageMargins
+    from openpyxl.worksheet.properties import PageSetupProperties
+    wb = Workbook(); ws = wb.active; ws.title = 'Form 12A'
+    thin = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
+    bold = Font(name='Arial', size=10, bold=True)
+    _epf_excel_header(ws, est, 'FORM 12A',
+                      'Statement of Contributions — Employees’ Provident Fund & related Schemes  [Para 38(2)]',
+                      f'Wage Month: {payroll.month_name} {payroll.year}', 5)
+    for c in 'ABCDE':
+        ws.column_dimensions[c].width = [8, 40, 16, 16, 18]['ABCDE'.index(c)]
+
+    # Membership summary
+    r = 7
+    ws.cell(row=r, column=1, value='Membership').font = bold
+    r += 1
+    for lbl, val in [('No. of subscribers (EPF members) contributing', epf_members),
+                     ('Members joined during the month (Form 5)', joined),
+                     ('Members left during the month (Form 10)', left)]:
+        ws.cell(row=r, column=2, value=lbl).border = thin
+        vc = ws.cell(row=r, column=4, value=val); vc.border = thin; vc.alignment = Alignment(horizontal='right')
+        ws.cell(row=r, column=3).border = thin; ws.cell(row=r, column=5).border = thin
+        r += 1
+
+    r += 1
+    ws.cell(row=r, column=1, value='Wages').font = bold
+    r += 1
+    for lbl, val in [('EPF Wages', f12['epf_wages']), ('EPS Wages', f12['eps_wages']), ('EDLI Wages', f12['edli_wages'])]:
+        ws.cell(row=r, column=2, value=lbl).border = thin
+        vc = ws.cell(row=r, column=4, value=val); vc.border = thin; vc.alignment = Alignment(horizontal='right'); vc.number_format = '#,##0'
+        ws.cell(row=r, column=3).border = thin; ws.cell(row=r, column=5).border = thin
+        r += 1
+
+    # Account-wise contributions table
+    r += 1
+    hdr = ['Account', 'Particulars', "Employees' Share", "Employer's Share", 'Total']
+    for i, h in enumerate(hdr, 1):
+        c = ws.cell(row=r, column=i, value=h)
+        c.font = Font(name='Arial', size=9, bold=True, color='FFFFFF'); c.fill = PatternFill('solid', fgColor='1E40AF')
+        c.alignment = Alignment(horizontal='center', wrap_text=True); c.border = thin
+    r += 1
+    lines = [
+        ('A/c No. 01', 'EPF Contribution (12% / 3.67%)', f12['ac01_ee'], f12['ac01_er'], f12['ac01_total']),
+        ('A/c No. 10', 'EPS Contribution (8.33%)', 0, f12['ac10'], f12['ac10']),
+        ('A/c No. 21', 'EDLI Contribution (0.50%)', 0, f12['ac21'], f12['ac21']),
+        ('A/c No. 02', 'EPF Admin Charges (0.50%)', 0, f12['ac02'], f12['ac02']),
+        ('A/c No. 22', 'EDLI Admin Charges (0.00%)', 0, f12['ac22'], f12['ac22']),
+    ]
+    for ac, part, ee, er, tot in lines:
+        vals = [ac, part, ee, er, tot]
+        for i, v in enumerate(vals, 1):
+            c = ws.cell(row=r, column=i, value=v)
+            c.font = Font(name='Arial', size=9)
+            c.alignment = Alignment(horizontal='left' if i in (1, 2) else 'right', vertical='center')
+            c.border = thin
+            if i in (3, 4, 5):
+                c.number_format = '#,##0'
+        r += 1
+    # Grand total
+    ws.cell(row=r, column=2, value='TOTAL EPF CHALLAN (25%)').font = bold
+    gc = ws.cell(row=r, column=5, value=f12['grand_total']); gc.font = bold; gc.number_format = '#,##0'
+    gc.alignment = Alignment(horizontal='right')
+    for i in range(1, 6):
+        ws.cell(row=r, column=i).border = thin; ws.cell(row=r, column=i).fill = PatternFill('solid', fgColor='FEF3C7')
+    r += 3
+    ws.cell(row=r, column=2, value='Signature of the Employer / Authorised Signatory').font = bold
+
+    ws.page_setup.orientation = 'portrait'; ws.page_setup.paperSize = 5
+    ws.page_setup.fitToWidth = 1; ws.page_setup.fitToHeight = 0
+    ws.sheet_properties.pageSetUpPr = PageSetupProperties(fitToPage=True)
+    ws.page_margins = PageMargins(left=0.5, right=0.4, top=0.5, bottom=0.4)
+    output = io.BytesIO(); wb.save(output); output.seek(0)
+    return output
+
 
 
 # ============================================================
