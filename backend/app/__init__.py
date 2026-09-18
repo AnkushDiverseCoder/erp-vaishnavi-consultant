@@ -856,7 +856,23 @@ def _auto_migrate_columns(db):
         # EPF employer 12% vs 13% choice (pay EDLI + Admin on top of 12% or not)
         "ALTER TABLE payroll_configs ADD COLUMN IF NOT EXISTS epf_pay_admin_edli BOOLEAN DEFAULT TRUE",
         # EPF wage-ceiling regime: 'old' ₹15,000 / 'new' ₹25,000 / 'custom'
-        "ALTER TABLE payroll_configs ADD COLUMN IF NOT EXISTS epf_ceiling_regime VARCHAR(10) NOT NULL DEFAULT 'old'",
+        "ALTER TABLE payroll_configs ADD COLUMN IF NOT EXISTS epf_ceiling_regime VARCHAR(10) NOT NULL DEFAULT 'new'",
+        # New Regime is now the default (Gazette S.O. 5109(E), w.e.f. 17-Sep-2026)
+        "ALTER TABLE payroll_configs ALTER COLUMN epf_ceiling_regime SET DEFAULT 'new'",
+        "ALTER TABLE payroll_configs ALTER COLUMN epf_wage_ceiling SET DEFAULT 25000",
+        # One-time backfill (both guarded by NOT EXISTS('new') so they run
+        # exactly ONCE — after the first flip they never re-touch a deliberate
+        # 'old'/'custom' choice the user makes later). Custom-preserve runs
+        # first, then the plain-old-default flip to New.
+        # (a) Preserve any establishment that had a non-standard ceiling as 'custom'.
+        ("UPDATE payroll_configs SET epf_ceiling_regime='custom' "
+         "WHERE epf_ceiling_regime='old' AND epf_wage_ceiling NOT IN (15000, 25000) "
+         "AND NOT EXISTS (SELECT 1 FROM payroll_configs WHERE epf_ceiling_regime='new')"),
+        # (b) Move establishments still on the plain old default (₹15,000) to
+        #     the New Regime (₹25,000).
+        ("UPDATE payroll_configs SET epf_ceiling_regime='new', epf_wage_ceiling=25000 "
+         "WHERE epf_ceiling_regime='old' AND epf_wage_ceiling=15000 "
+         "AND NOT EXISTS (SELECT 1 FROM payroll_configs WHERE epf_ceiling_regime='new')"),
         # Manual "Loss of Pay" system (per-establishment toggle + two manual day counts)
         "ALTER TABLE payroll_configs ADD COLUMN IF NOT EXISTS lop_system_enabled BOOLEAN DEFAULT FALSE",
         "ALTER TABLE payroll_entries ADD COLUMN IF NOT EXISTS lop_days DOUBLE PRECISION DEFAULT 0",

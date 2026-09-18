@@ -149,8 +149,8 @@ def payroll_config(est_id):
                 config.epf_edli_rate = float(request.form.get('epf_edli_rate', 0.50))
                 config.epf_admin_min = float(request.form.get('epf_admin_min', 500))
                 # EPF wage-ceiling regime: old ₹15,000 / new ₹25,000 / custom
-                _regime = request.form.get('epf_ceiling_regime', 'old')
-                config.epf_ceiling_regime = _regime if _regime in ('old', 'new', 'custom') else 'old'
+                _regime = request.form.get('epf_ceiling_regime', 'new')
+                config.epf_ceiling_regime = _regime if _regime in ('old', 'new', 'custom') else 'new'
                 if _regime == 'old':
                     config.epf_wage_ceiling = 15000.0
                 elif _regime == 'new':
@@ -2358,12 +2358,14 @@ def save_attendance(payroll_id):
         if config.epf_applicable and not emp.epf_exempt:
             # ── STATUTORY EPF WAGE RULES ────────────────────────────────
             # EPF (12%)      : base varies — full wages if 'higher' deduction,
-            #                  else capped at establishment's epf_wage_ceiling
-            # EPS (8.33%)    : ALWAYS capped at ₹15,000 (statutory EPS ceiling)
-            # EDLI (0.5%)    : ALWAYS capped at ₹15,000 (statutory EDLI ceiling)
-            # Admin (0.5%)   : Same base as EDLI (capped at ₹15,000)
+            #                  else capped at the establishment's epf_wage_ceiling
+            # EPS (8.33%)    : capped at the ceiling regime (₹15,000 old / ₹25,000 new)
+            # EDLI (0.5%)    : capped at the ceiling regime (₹15,000 old / ₹25,000 new)
+            # Admin (0.5%)   : same base as EDLI
             # ────────────────────────────────────────────────────────────
-            EPF_STATUTORY_CEILING = 15000   # Hard limit for EPS + EDLI + Admin
+            # Ceiling follows the establishment's EPF wage-ceiling regime
+            # (old ₹15,000 / new ₹25,000 / custom) — see epf_ceiling_regime.
+            EPF_STATUTORY_CEILING = config.epf_wage_ceiling or 15000
 
             # EPF base
             if config.epf_contribution_type == 'higher':
@@ -2372,7 +2374,7 @@ def save_attendance(payroll_id):
                 epf_wages = min(compliance_wages, config.epf_wage_ceiling)
             entry.epf_wages = epf_wages
 
-            # EPS/EDLI base — always capped at ₹15,000 regardless of higher/regular
+            # EPS/EDLI base — capped at the ceiling regime (15k old / 25k new)
             eps_edli_wages = min(epf_wages, EPF_STATUTORY_CEILING)
 
             # Employee share: 12% of EPF wages (uses higher base if higher deduction)
