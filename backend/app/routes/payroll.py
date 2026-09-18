@@ -2393,24 +2393,23 @@ def save_attendance(payroll_id):
             entry.epf_employee = round(epf_wages * config.epf_employee_rate / 100)
 
             # Employer breakdown:
-            #   EPS (8.33% of capped wages) — MAX ₹1,250/employee
-            #   A/c 01 = Total employer 12% × epf_wages − EPS
-            #            (for higher deduction, A/c 01 absorbs the excess above ceiling)
-            #   EDLI (0.5% of capped wages) — MAX ₹75/employee
+            #   EPS (8.33% of the EPS/EDLI-capped wages)
+            #   A/c 01 = Employee 12% − EPS (for higher deduction, A/c 01
+            #            absorbs the excess above the EPS/EDLI ceiling)
+            #   EDLI (0.5% of the EPS/EDLI-capped wages)
             #   Admin (0.5% of the EPF contribution wages — see below)
-            entry.epf_eps = round(eps_edli_wages * config.epf_eps_rate / 100)      # 8.33% × min(wages, 15000)
+            entry.epf_eps = round(eps_edli_wages * config.epf_eps_rate / 100)      # 8.33% × EPS/EDLI-capped wages
             entry.epf_ac01 = entry.epf_employee - entry.epf_eps                      # Balance: Employee 12% − EPS
-            entry.epf_edli = round(eps_edli_wages * config.epf_edli_rate / 100)    # 0.5% × min(wages, 15000)
+            entry.epf_edli = round(eps_edli_wages * config.epf_edli_rate / 100)    # 0.5% × EPS/EDLI-capped wages
 
             # Admin charge (A/c 02): 0.5% of the EPF contribution wages.
             #   • Higher deduction  → PF is paid on the FULL (gross) wages, so
-            #     per the Act the admin charge is 0.5% of those full wages,
-            #     NOT the ₹15,000-capped base. (e.g. Muskan Electrical)
-            #   • Regular           → unchanged: 0.5% of the ₹15,000-capped base.
+            #     the admin charge is 0.5% of those full wages.
+            #   • Regular           → 0.5% of the EPS/EDLI-capped base.
             if config.epf_contribution_type == 'higher':
                 admin_base = epf_wages          # full contributory / gross wages
             else:
-                admin_base = eps_edli_wages     # capped at ₹15,000 (unchanged)
+                admin_base = eps_edli_wages     # capped at the EPS/EDLI ceiling
             entry.epf_admin = round(admin_base * config.epf_admin_rate / 100)
 
             # NOTE: EDLI (0.5%) + Admin (0.5%) are ALWAYS paid by the employer —

@@ -48,7 +48,7 @@ from app.utils.naming import short_est_code
 non_client_bp = Blueprint('non_client', __name__)
 
 # ── Statutory rates ────────────────────────────────────────────────────────────
-EPF_CEILING  = 15000    # Used ONLY for EPS pension base (statutory pension ceiling)
+EPF_CEILING  = 25000    # EPS/EDLI pension base ceiling — New Regime default (Gazette S.O. 5109(E), w.e.f. 17-Sep-2026; was ₹15,000)
 EPF_EE_RATE  = 0.12     # Employee EPF contribution
 EPS_RATE     = 0.0833   # Employer EPS portion
 ADMIN_RATE   = 0.005    # EPF Admin charges (0.5%, min ₹500)
@@ -676,7 +676,7 @@ def _generate_input_template(month: int, year: int, est_name: str) -> io.BytesIO
         ('', '', ''),
         ('— EPF  (NO CEILING) —', '', ''),
         ('EE Contribution',    '12% of EPF wages — ACTUAL wages used, no ₹15,000 cap.', '20000 × 12% = 2400'),
-        ('EPS  (Employer)',    '8.33% of wages — EPS pension base STILL capped at ₹15,000.', 'Max EPS = 15000×8.33%=1250'),
+        ('EPS  (Employer)',    '8.33% of wages — EPS pension base capped at ₹25,000 (New Regime).', 'Max EPS = 25000×8.33%=2082'),
         ('EPF AC-I  (Diff)',   '3.67% of EPF wages (= EPF EE − EPS)', ''),
         ('Admin Charges',      '0.5% of total EPF wages — minimum ₹500', ''),
         ('EDLI',               '0.5% of EPF wages', ''),

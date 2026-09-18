@@ -77,6 +77,12 @@ def _aggregate_epf(est_id, start_year):
         PayrollEntry.monthly_payroll_id.in_(payroll_ids)
     ).all() if payroll_ids else []
 
+    # EPS/EDLI wage ceiling follows the establishment's regime (₹15,000 old /
+    # ₹25,000 new / custom) instead of a hard-coded ₹15,000.
+    from app.models.payroll import PayrollConfig as _PC
+    _cfg = _PC.query.filter_by(establishment_id=est_id).first()
+    _eps_ceiling = float(getattr(_cfg, 'eps_edli_ceiling', None) or 15000.0) if _cfg else 15000.0
+
     # Map payroll_id → (year, month)
     pid_to_ym = {p.id: (p.year, p.month) for p in pmap.values()}
 
@@ -93,7 +99,7 @@ def _aggregate_epf(est_id, start_year):
             'monthly': {},
             't_wages': 0.0, 't_ee': 0.0, 't_ac01': 0.0, 't_eps': 0.0,
         })
-        eps_wages = min(float(e.epf_wages or 0), 15000.0)
+        eps_wages = min(float(e.epf_wages or 0), _eps_ceiling)
         bucket['monthly'][ym] = {
             'epf_wages': float(e.epf_wages or 0),
             'eps_wages': eps_wages,

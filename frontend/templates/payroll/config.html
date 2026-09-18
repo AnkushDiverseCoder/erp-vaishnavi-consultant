@@ -543,10 +543,10 @@
                     <div class="col-md-4">
                         <label class="form-label" style="font-size:0.8rem;">EPF Contribution Type</label>
                         <select name="epf_contribution_type" class="form-select form-select-sm" id="epfContribType" onchange="toggleEpfCeiling()">
-                            <option value="ceiling" {% if not config or config.epf_contribution_type == 'ceiling' %}selected{% endif %}>Ceiling Slab (on max ₹15,000)</option>
-                            <option value="higher" {% if config and config.epf_contribution_type == 'higher' %}selected{% endif %}>Higher Deduction (on full wages)</option>
+                            <option value="ceiling" {% if not config or config.epf_contribution_type == 'ceiling' %}selected{% endif %}>Ceiling Slab — cap at the wage ceiling (set beside)</option>
+                            <option value="higher" {% if config and config.epf_contribution_type == 'higher' %}selected{% endif %}>Higher Deduction — on full actual wages (no cap)</option>
                         </select>
-                        <small class="text-muted">Higher = EPF on actual wages, no ceiling cap</small>
+                        <small class="text-muted"><strong>Ceiling</strong> = cap EPF wages at the ceiling regime beside (₹15k/₹25k/custom). <strong>Higher</strong> = EPF on full actual wages, no cap. Different from the ceiling amount — still needed.</small>
                     </div>
                     <div class="col-md-4" id="epfCeilingDiv" style="display:{% if config and config.epf_contribution_type == 'higher' %}none{% else %}block{% endif %};">
                         <label class="form-label" style="font-size:0.8rem;">EPF Wage Ceiling Regime</label>
