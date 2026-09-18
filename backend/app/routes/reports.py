@@ -3737,10 +3737,11 @@ def _build_ecr_data(payroll_id):
 
         gross_wages = int(round(entry.earned_gross))
         epf_wages = int(round(entry.epf_wages)) if entry.epf_wages else gross_wages
-        # EPS + EDLI wages: capped at the establishment's EPF wage-ceiling regime
-        # (₹15,000 old / ₹25,000 new / custom). Applies even for "higher
-        # deduction" establishments where EPF wages exceed the ceiling.
-        EPF_STATUTORY_CEILING = int(round(getattr(config, 'epf_wage_ceiling', 15000) or 15000))
+        # EPS + EDLI wages: capped at the establishment's INDEPENDENT EPS/EDLI
+        # ceiling regime (₹15,000 old / ₹25,000 new / custom), and never above
+        # the EPF wages base. Applies even for "higher deduction" establishments.
+        EPF_STATUTORY_CEILING = int(round(getattr(config, 'eps_edli_ceiling', None)
+                                          or getattr(config, 'epf_wage_ceiling', 15000) or 15000))
         eps_wages = min(epf_wages, EPF_STATUTORY_CEILING)
         edli_wages = min(epf_wages, EPF_STATUTORY_CEILING)
         epf_ee = int(round(entry.epf_employee))          # Employee 12%

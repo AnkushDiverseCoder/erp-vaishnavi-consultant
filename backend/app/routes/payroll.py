@@ -157,6 +157,15 @@ def payroll_config(est_id):
                     config.epf_wage_ceiling = 25000.0
                 else:  # custom — honour the entered value
                     config.epf_wage_ceiling = float(request.form.get('epf_wage_ceiling', 15000))
+                # Independent EPS/EDLI/Admin ceiling regime
+                _eregime = request.form.get('eps_edli_regime', 'new')
+                config.eps_edli_regime = _eregime if _eregime in ('old', 'new', 'custom') else 'new'
+                if _eregime == 'old':
+                    config.eps_edli_ceiling = 15000.0
+                elif _eregime == 'new':
+                    config.eps_edli_ceiling = 25000.0
+                else:  # custom
+                    config.eps_edli_ceiling = float(request.form.get('eps_edli_ceiling', 15000))
             except ValueError:
                 pass
             config.epf_employer_in_ctc = 'epf_employer_in_ctc' in request.form
@@ -2363,9 +2372,12 @@ def save_attendance(payroll_id):
             # EDLI (0.5%)    : capped at the ceiling regime (₹15,000 old / ₹25,000 new)
             # Admin (0.5%)   : same base as EDLI
             # ────────────────────────────────────────────────────────────
-            # Ceiling follows the establishment's EPF wage-ceiling regime
-            # (old ₹15,000 / new ₹25,000 / custom) — see epf_ceiling_regime.
-            EPF_STATUTORY_CEILING = config.epf_wage_ceiling or 15000
+            # Two INDEPENDENT ceilings (flexibility — see epf_ceiling_regime and
+            # eps_edli_regime):
+            #   • EPF / Wages ceiling  → config.epf_wage_ceiling
+            #   • EPS / EDLI / Admin   → config.eps_edli_ceiling
+            # Either can be ₹15,000 (old) / ₹25,000 (new) / custom, in any mix.
+            EPF_STATUTORY_CEILING = getattr(config, 'eps_edli_ceiling', None) or config.epf_wage_ceiling or 15000
 
             # EPF base
             if config.epf_contribution_type == 'higher':
@@ -2374,7 +2386,7 @@ def save_attendance(payroll_id):
                 epf_wages = min(compliance_wages, config.epf_wage_ceiling)
             entry.epf_wages = epf_wages
 
-            # EPS/EDLI base — capped at the ceiling regime (15k old / 25k new)
+            # EPS/EDLI/Admin base — capped at the (independent) EPS/EDLI ceiling
             eps_edli_wages = min(epf_wages, EPF_STATUTORY_CEILING)
 
             # Employee share: 12% of EPF wages (uses higher base if higher deduction)

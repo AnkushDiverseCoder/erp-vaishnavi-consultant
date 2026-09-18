@@ -166,6 +166,15 @@ class PayrollConfig(db.Model):
     # Defaults to 'new' (the current statutory ceiling); user can switch to
     # 'old'/'custom' per client or per official requirement.
     epf_ceiling_regime = db.Column(db.String(10), nullable=False, default='new')
+
+    # --- SEPARATE EPS / EDLI / Admin wage ceiling (independent flexibility) ---
+    # The EPF department has not fully clarified whether EPS/EDLI follow the new
+    # ₹25,000 ceiling, so the establishment can choose this INDEPENDENTLY of the
+    # EPF/Wages ceiling above. Every combination is allowed, e.g. EPF on ₹25,000
+    # while EPS/EDLI stay on ₹15,000, or vice-versa. Admin charge follows this
+    # EPS/EDLI ceiling. Defaults to New (₹25,000).
+    eps_edli_ceiling = db.Column(db.Float, default=25000.0)
+    eps_edli_regime = db.Column(db.String(10), nullable=False, default='new')
     # Include employer share in CTC? (some clients do)
     epf_employer_in_ctc = db.Column(db.Boolean, default=False)
 

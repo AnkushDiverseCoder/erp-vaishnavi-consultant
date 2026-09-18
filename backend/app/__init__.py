@@ -873,6 +873,10 @@ def _auto_migrate_columns(db):
         ("UPDATE payroll_configs SET epf_ceiling_regime='new', epf_wage_ceiling=25000 "
          "WHERE epf_ceiling_regime='old' AND epf_wage_ceiling=15000 "
          "AND NOT EXISTS (SELECT 1 FROM payroll_configs WHERE epf_ceiling_regime='new')"),
+        # Separate EPS/EDLI/Admin ceiling regime (independent of EPF/Wages).
+        # New default (₹25,000) fills existing rows automatically on ADD COLUMN.
+        "ALTER TABLE payroll_configs ADD COLUMN IF NOT EXISTS eps_edli_ceiling DOUBLE PRECISION DEFAULT 25000",
+        "ALTER TABLE payroll_configs ADD COLUMN IF NOT EXISTS eps_edli_regime VARCHAR(10) NOT NULL DEFAULT 'new'",
         # Manual "Loss of Pay" system (per-establishment toggle + two manual day counts)
         "ALTER TABLE payroll_configs ADD COLUMN IF NOT EXISTS lop_system_enabled BOOLEAN DEFAULT FALSE",
         "ALTER TABLE payroll_entries ADD COLUMN IF NOT EXISTS lop_days DOUBLE PRECISION DEFAULT 0",

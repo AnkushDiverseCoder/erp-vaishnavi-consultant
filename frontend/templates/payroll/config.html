@@ -559,7 +559,20 @@
                                value="{{ config.epf_wage_ceiling if config else 25000 }}"
                                style="display:{% if config and config.epf_ceiling_regime == 'custom' %}block{% else %}none{% endif %};"
                                placeholder="Enter custom ceiling ₹">
-                        <small class="text-muted">Gazette S.O. 5109(E) raised the ceiling ₹15,000 → ₹25,000 (default New). This ceiling caps <strong>EPF, EPS, EDLI &amp; Admin</strong> wages together. Switch to Old/Custom per client or official requirement.</small>
+                        <small class="text-muted">Caps <strong>EPF / Wages</strong>. Gazette S.O. 5109(E) raised ₹15,000 → ₹25,000 (default New).</small>
+                    </div>
+                    <div class="col-md-4" id="epsEdliCeilingDiv" style="display:{% if config and config.epf_contribution_type == 'higher' %}none{% else %}block{% endif %};">
+                        <label class="form-label" style="font-size:0.8rem;">EPS / EDLI / Admin Ceiling Regime</label>
+                        <select name="eps_edli_regime" class="form-select form-select-sm" id="epsEdliRegime" onchange="toggleEpsEdliCustom()">
+                            <option value="new" {% if not config or config.eps_edli_regime == 'new' %}selected{% endif %}>New Regime — ₹25,000 — default</option>
+                            <option value="old" {% if config and config.eps_edli_regime == 'old' %}selected{% endif %}>Old Regime — ₹15,000</option>
+                            <option value="custom" {% if config and config.eps_edli_regime == 'custom' %}selected{% endif %}>Custom amount</option>
+                        </select>
+                        <input type="number" name="eps_edli_ceiling" id="epsEdliCeiling" class="form-control form-control-sm mt-1"
+                               value="{{ config.eps_edli_ceiling if config else 25000 }}"
+                               style="display:{% if config and config.eps_edli_regime == 'custom' %}block{% else %}none{% endif %};"
+                               placeholder="Enter custom ceiling ₹">
+                        <small class="text-muted">Caps <strong>EPS, EDLI &amp; Admin</strong> — set INDEPENDENTLY of EPF (any mix allowed). Never exceeds the EPF wage base.</small>
                     </div>
                     <div class="col-md-4 d-flex align-items-end">
                         <div class="form-check" style="padding:6px 0;">
@@ -742,12 +755,21 @@
             document.getElementById('epfApplicable').checked ? 'block' : 'none';
     }
     function toggleEpfCeiling() {
-        document.getElementById('epfCeilingDiv').style.display =
-            document.getElementById('epfContribType').value === 'higher' ? 'none' : 'block';
+        var hide = document.getElementById('epfContribType').value === 'higher' ? 'none' : 'block';
+        document.getElementById('epfCeilingDiv').style.display = hide;
+        var ed = document.getElementById('epsEdliCeilingDiv');
+        if (ed) ed.style.display = hide;
     }
     function toggleEpfCeilingCustom() {
         var r = document.getElementById('epfCeilingRegime').value;
         var box = document.getElementById('epfWageCeiling');
+        box.style.display = (r === 'custom') ? 'block' : 'none';
+        if (r === 'old') box.value = 15000;
+        else if (r === 'new') box.value = 25000;
+    }
+    function toggleEpsEdliCustom() {
+        var r = document.getElementById('epsEdliRegime').value;
+        var box = document.getElementById('epsEdliCeiling');
         box.style.display = (r === 'custom') ? 'block' : 'none';
         if (r === 'old') box.value = 15000;
         else if (r === 'new') box.value = 25000;
