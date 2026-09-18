@@ -31,7 +31,7 @@
   </ol></nav>
   <div class="d-flex gap-2">
     <a href="{{ url_for('reports.form12a_excel', payroll_id=payroll.id) }}" class="btn btn-success btn-sm"><i class="bi bi-file-earmark-excel me-1"></i> Download Excel</a>
-    <button onclick="window.history.back()" style="background:#e5e7eb;color:#333;border:none;padding:6px 16px;border-radius:6px;cursor:pointer;font-size:.82rem;"><i class="bi bi-arrow-left me-1"></i> Back</button>
+    <button onclick="if(window.history.length>1){window.history.back()}else{window.location.href='{{ url_for('payroll.payroll_process', payroll_id=payroll.id) }}'}" style="background:#e5e7eb;color:#333;border:none;padding:6px 16px;border-radius:6px;cursor:pointer;font-size:.82rem;"><i class="bi bi-arrow-left me-1"></i> Back</button>
     <button onclick="window.print()" class="btn btn-primary btn-sm"><i class="bi bi-printer me-1"></i> Print / PDF</button>
   </div>
 </div>
