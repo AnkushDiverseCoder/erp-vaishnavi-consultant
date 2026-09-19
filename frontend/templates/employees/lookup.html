@@ -102,6 +102,20 @@
           <tr><td class="k">Department</td><td class="v">{{ p.department or '—' }}</td></tr>
           <tr><td class="k">Date of Joining</td><td class="v">{{ p.date_of_joining.strftime('%d-%m-%Y') if p.date_of_joining else '—' }}</td></tr>
           <tr><td class="k">Date of Exit</td><td class="v">{{ p.date_of_exit.strftime('%d-%m-%Y') if p.date_of_exit else '—' }}{% if p.exit_reason %} ({{ p.exit_reason }}){% endif %}</td></tr>
+          <tr><td class="k">Last Contribution Paid</td><td class="v">
+            {% set lr = data.last_contribution_row %}
+            {% if lr %}
+              <strong style="color:#1e40af;">{{ lr.period }}</strong>
+              <div style="margin-top:4px; font-weight:500; color:#334155; font-size:.78rem; line-height:1.5;">
+                Attendance: <strong>{{ lr.days|int if lr.days == lr.days|int else "%.1f"|format(lr.days) }}</strong> days &nbsp;•&nbsp;
+                Gross: <strong>₹{{ "{:,.0f}".format(lr.gross) }}</strong><br>
+                EPF (EE): <strong>₹{{ "{:,.0f}".format(lr.epf_ee) }}</strong> &nbsp;•&nbsp;
+                EPS: <strong>₹{{ "{:,.0f}".format(lr.eps) }}</strong> &nbsp;•&nbsp;
+                ESIC (EE): <strong>₹{{ "{:,.0f}".format(lr.esic_ee) }}</strong><br>
+                Net Paid: <strong style="color:#16a34a;">₹{{ "{:,.0f}".format(lr.net) }}</strong>
+              </div>
+            {% else %}<span style="color:#94a3b8;">No contribution on record</span>{% endif %}
+          </td></tr>
           <tr><td class="k">EPF</td><td class="v">{% if p.epf_exempt %}<span class="badge-soft b-warn">EXEMPT</span> {{ p.epf_exemption_reason or '' }}{% else %}Applicable{% endif %}</td></tr>
           <tr><td class="k">ESIC</td><td class="v">{% if p.esic_exempt %}<span class="badge-soft b-warn">EXEMPT</span> {{ p.esic_exemption_reason or '' }}{% else %}Applicable{% endif %}</td></tr>
         </table>

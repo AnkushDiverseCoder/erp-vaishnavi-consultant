@@ -135,7 +135,6 @@ def _employee_360(q, user_est_ids):
                .all())
 
     history = []
-    last_contrib = None            # (year, month) of the latest month with an EPF deduction
     tot = {'months': 0, 'epf_ee': 0, 'epf_er': 0, 'eps': 0, 'esic_ee': 0, 'pt': 0, 'net': 0}
     for en in entries:
         mp = en.monthly_payroll
@@ -158,14 +157,13 @@ def _employee_360(q, user_est_ids):
         tot['esic_ee'] += round(en.esic_employee or 0)
         tot['pt'] += round(en.professional_tax or 0)
         tot['net'] += round(en.net_pay or 0)
-        if epf_ee > 0 and last_contrib is None:
-            last_contrib = (mp.year, mp.month)   # first hit = latest (list is desc)
 
     first_period = history[-1]['period'] if history else None
-    last_contrib_disp = None
-    if last_contrib:
-        import calendar as _cal
-        last_contrib_disp = f"{_cal.month_name[last_contrib[1]]} {last_contrib[0]}"
+    # Last contribution paid = the most recent month (history is newest-first)
+    # where the employee was actually paid / contributed something.
+    last_row = next((h for h in history
+                     if (h['epf_ee'] or h['esic_ee'] or h['gross'])), None)
+    last_contrib_disp = last_row['period'] if last_row else None
 
     age = None
     if primary.date_of_birth:
@@ -182,6 +180,7 @@ def _employee_360(q, user_est_ids):
         'history': history,
         'totals': tot,
         'last_contribution': last_contrib_disp,
+        'last_contribution_row': last_row,
         'first_period': first_period,
     }
 
@@ -279,7 +278,19 @@ def employee_lookup_excel():
         ('Date of Joining', p.date_of_joining.strftime('%d-%m-%Y') if p.date_of_joining else ''),
         ('Date of Exit', (p.date_of_exit.strftime('%d-%m-%Y') if p.date_of_exit else '') + (f' ({p.exit_reason})' if p.exit_reason else '')),
         ('Status', 'Active' if p.is_active else 'Left'),
-        ('Last EPF Contribution', data['last_contribution'] or ''),
+        ('Last Contribution Paid', data['last_contribution'] or ''),
+    ]
+    _lr = data.get('last_contribution_row')
+    if _lr:
+        rows += [
+            ('  Last Month — Attendance', f"{int(_lr['days']) if _lr['days'] == int(_lr['days']) else _lr['days']} days"),
+            ('  Last Month — Gross', _lr['gross']),
+            ('  Last Month — EPF (EE)', _lr['epf_ee']),
+            ('  Last Month — EPS', _lr['eps']),
+            ('  Last Month — ESIC (EE)', _lr['esic_ee']),
+            ('  Last Month — Net Paid', _lr['net']),
+        ]
+    rows += [
         ('Bank Name', p.bank_name or ''), ('Bank Account No.', p.bank_account_number or ''),
         ('IFSC', p.bank_ifsc_code or ''),
     ]
