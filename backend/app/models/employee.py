@@ -57,7 +57,7 @@ class Employee(db.Model):
 
     # Exit Details
     date_of_exit = db.Column(db.Date, nullable=True)
-    exit_reason = db.Column(db.String(50), nullable=True)       # Resigned, Terminated, Absconded, Retired, Deceased
+    exit_reason = db.Column(db.String(120), nullable=True)      # EPF-department reasons (Retirement/Death/Cessation…) + internal (Resigned/Absconded…)
 
     # Status
     is_active = db.Column(db.Boolean, default=True)

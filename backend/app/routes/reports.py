@@ -4016,16 +4016,16 @@ def _build_esic_rows(entries, payroll, round_up=False):
             # Only provide last working day if 0 days wages paid
             if total_days == 0:
                 last_working_day = emp.date_of_exit.strftime('%d/%m/%Y')
-            if emp.exit_reason == 'Resigned':
-                reason_code = '2'   # Left Service
-            elif emp.exit_reason == 'Terminated':
-                reason_code = '2'   # Left Service
-            elif emp.exit_reason == 'Retired':
-                reason_code = '3'   # Retired
-            elif emp.exit_reason == 'Deceased':
-                reason_code = '5'   # Expired
-            elif emp.exit_reason == 'Absconded':
-                reason_code = '2'   # Left Service
+            # Map the exit reason (old short values OR the official EPF-department
+            # reasons) to an ESIC reason code by keyword:
+            #   5 = Expired, 3 = Retired, 10 = Retrenchment, else 2 = Left Service
+            _rl = (emp.exit_reason or '').lower()
+            if any(k in _rl for k in ('death', 'deceased', 'expired')):
+                reason_code = '5'
+            elif any(k in _rl for k in ('retire', 'superannuation', 'incapacity', 'voluntary scheme')):
+                reason_code = '3'
+            elif 'retrench' in _rl:
+                reason_code = '10'
             else:
                 reason_code = '2'
         elif total_days == 0 and total_wages == 0:

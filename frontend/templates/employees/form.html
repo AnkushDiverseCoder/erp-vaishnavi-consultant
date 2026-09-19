@@ -619,12 +619,40 @@
                                value="{{ emp.date_of_exit.strftime('%Y-%m-%d') if emp and emp.date_of_exit else '' }}">
                     </div>
                     <div class="col-md-3">
-                        <label class="form-label">Exit Reason</label>
+                        <label class="form-label">Exit Reason (EPF Department)</label>
+                        {% set epf_reasons = [
+                            'RETIREMENT',
+                            'DEATH IN SERVICE',
+                            'SUPERANNUATION',
+                            'PERMANENT DISABLEMENT',
+                            'CESSATION (SHORT SERVICE) - Any other reason',
+                            'CESSATION (SHORT SERVICE) - The employee ill health',
+                            "CESSATION (SHORT SERVICE) - Closure of Contract or Closure of Employer's business",
+                            'CESSATION (SHORT SERVICE) - Other cause beyond the control of employee',
+                            'Retirement from service after attaining the age of 55 years',
+                            'Retirement on account of permanent and total incapacity',
+                            'Migration from India for permanent settlement / taking employment abroad',
+                            'Termination of service in the case of mass or individual retrenchment',
+                            'Termination of service under a voluntary scheme of retirement',
+                            'Marriage'
+                        ] %}
+                        {% set internal_reasons = ['Resigned', 'Terminated', 'Absconded', 'Retired', 'Deceased', 'Contract Ended'] %}
                         <select name="exit_reason" class="form-select">
-                            <option value="">Select</option>
-                            {% for r in ['Resigned', 'Terminated', 'Absconded', 'Retired', 'Deceased', 'Contract Ended'] %}
-                            <option value="{{ r }}" {% if emp and emp.exit_reason == r %}selected{% endif %}>{{ r }}</option>
-                            {% endfor %}
+                            <option value="">-- Select --</option>
+                            {# Preserve any previously-saved value not in the lists #}
+                            {% if emp and emp.exit_reason and emp.exit_reason not in epf_reasons and emp.exit_reason not in internal_reasons %}
+                            <option value="{{ emp.exit_reason }}" selected>{{ emp.exit_reason }}</option>
+                            {% endif %}
+                            <optgroup label="EPF Department Reasons (as per EPFO portal)">
+                                {% for r in epf_reasons %}
+                                <option value="{{ r }}" {% if emp and emp.exit_reason == r %}selected{% endif %}>{{ r }}</option>
+                                {% endfor %}
+                            </optgroup>
+                            <optgroup label="Other (Internal record)">
+                                {% for r in internal_reasons %}
+                                <option value="{{ r }}" {% if emp and emp.exit_reason == r %}selected{% endif %}>{{ r }}</option>
+                                {% endfor %}
+                            </optgroup>
                         </select>
                     </div>
                 </div>
