@@ -196,6 +196,137 @@ def employee_lookup():
     return render_template('employees/lookup.html', q=q, data=data, not_found=not_found)
 
 
+@employee_bp.route('/employees/<int:id>/reveal-pii')
+def employee_reveal_pii(id):
+    """Return a masked PII value (Aadhaar / bank account) in full — and LOG the
+    access to the audit trail. Kept out of the page source so it is only
+    disclosed (and recorded) on an explicit click."""
+    from flask import jsonify
+    field = request.args.get('field', '')
+    emp = Employee.query.get_or_404(id)
+    # Access control — only within the user's own establishments
+    user_est_ids = get_user_est_ids()
+    if user_est_ids and emp.establishment_id not in user_est_ids:
+        return jsonify({'error': 'Not authorised'}), 403
+
+    if field == 'aadhaar':
+        value = emp.aadhaar_number or ''
+        label = 'Aadhaar'
+    elif field == 'bank':
+        value = emp.bank_account_number or ''
+        label = 'Bank Account'
+    else:
+        return jsonify({'error': 'Unknown field'}), 400
+
+    try:
+        log_activity('reveal_pii', 'employee', emp.id, emp.name,
+                     details=f'Revealed {label} via Employee 360 Lookup',
+                     establishment_id=emp.establishment_id)
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+
+    return jsonify({'value': value})
+
+
+@employee_bp.route('/employees/lookup/excel')
+def employee_lookup_excel():
+    """Download the 360° profile + payroll history as Excel (logged as PII access)."""
+    from flask import send_file
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
+    import io as _io
+
+    q = request.args.get('q', '').strip()
+    data = _employee_360(q, get_user_est_ids()) if q else None
+    if not data:
+        flash('No employee found to export.', 'warning')
+        return redirect(url_for('employee.employee_lookup', q=q))
+
+    p = data['primary']
+    try:
+        log_activity('export_pii', 'employee', p.id, p.name,
+                     details='Exported Employee 360 profile (Excel)',
+                     establishment_id=p.establishment_id)
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+
+    thin = Border(*(Side(style='thin', color='BFBFBF'),) * 4)
+    hfill = PatternFill('solid', fgColor='1E40AF')
+    hfont = Font(name='Arial', size=10, bold=True, color='FFFFFF')
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = 'Profile'
+    ws.column_dimensions['A'].width = 26
+    ws.column_dimensions['B'].width = 44
+    ws.merge_cells('A1:B1')
+    ws['A1'] = f'EMPLOYEE 360 PROFILE — {p.name}'
+    ws['A1'].font = Font(name='Arial', size=13, bold=True)
+    est_line = '; '.join(sorted(set(data['est_names'].values())))
+    rows = [
+        ('UAN', p.uan_number or ''), ('ESIC IP Number', p.esic_ip_number or ''),
+        ('Name', p.name), ("Father / Husband", p.father_husband_name or ''),
+        ('Date of Birth', p.date_of_birth.strftime('%d-%m-%Y') if p.date_of_birth else ''),
+        ('Age', data['age'] if data['age'] is not None else ''),
+        ('Gender', p.gender or ''), ('Marital Status', p.marital_status or ''),
+        ('Aadhaar', p.aadhaar_number or ''), ('PAN', p.pan_number or ''),
+        ('Mobile', p.mobile_number or ''), ('Email', p.email or ''),
+        ('Address', p.address or ''),
+        ('Establishment(s)', est_line),
+        ('Designation', p.designation or ''), ('Department', p.department or ''),
+        ('Date of Joining', p.date_of_joining.strftime('%d-%m-%Y') if p.date_of_joining else ''),
+        ('Date of Exit', (p.date_of_exit.strftime('%d-%m-%Y') if p.date_of_exit else '') + (f' ({p.exit_reason})' if p.exit_reason else '')),
+        ('Status', 'Active' if p.is_active else 'Left'),
+        ('Last EPF Contribution', data['last_contribution'] or ''),
+        ('Bank Name', p.bank_name or ''), ('Bank Account No.', p.bank_account_number or ''),
+        ('IFSC', p.bank_ifsc_code or ''),
+    ]
+    r = 3
+    for k, v in rows:
+        ws.cell(row=r, column=1, value=k).font = Font(name='Arial', size=10, bold=True)
+        ws.cell(row=r, column=1).border = thin
+        c = ws.cell(row=r, column=2, value=v); c.border = thin; c.font = Font(name='Arial', size=10)
+        r += 1
+
+    # History sheet
+    hs = wb.create_sheet('Payroll History')
+    heads = ['Month', 'Establishment', 'Days', 'Gross', 'EPF Wages', 'EPF (EE)', 'EPF (ER)',
+             'EPS', 'ESIC (EE)', 'PT', 'Net Pay', 'Status']
+    widths = [16, 26, 7, 12, 12, 11, 11, 10, 11, 8, 12, 12]
+    for i, (h, w) in enumerate(zip(heads, widths), 1):
+        cell = hs.cell(row=1, column=i, value=h)
+        cell.font = hfont; cell.fill = hfill; cell.border = thin
+        cell.alignment = Alignment(horizontal='center', wrap_text=True)
+        hs.column_dimensions[chr(64 + i)].width = w
+    rr = 2
+    for h in data['history']:
+        vals = [h['period'], h['est'], h['days'], h['gross'], h['epf_wages'], h['epf_ee'],
+                h['epf_er'], h['eps'], h['esic_ee'], h['pt'], h['net'], h['status'].title()]
+        for i, v in enumerate(vals, 1):
+            cell = hs.cell(row=rr, column=i, value=v)
+            cell.border = thin; cell.font = Font(name='Arial', size=9)
+            if i >= 3:
+                cell.alignment = Alignment(horizontal='right')
+                if i >= 4:
+                    cell.number_format = '#,##0'
+        rr += 1
+    # Totals row
+    t = data['totals']
+    hs.cell(row=rr, column=2, value='TOTAL').font = Font(bold=True)
+    for col, val in [(6, t['epf_ee']), (7, t['epf_er']), (8, t['eps']), (9, t['esic_ee']), (10, t['pt']), (11, t['net'])]:
+        cc = hs.cell(row=rr, column=col, value=val)
+        cc.font = Font(name='Arial', size=9, bold=True); cc.number_format = '#,##0'
+        cc.alignment = Alignment(horizontal='right'); cc.fill = PatternFill('solid', fgColor='FEF3C7')
+
+    out = _io.BytesIO(); wb.save(out); out.seek(0)
+    ident = (p.uan_number or p.esic_ip_number or str(p.id))
+    return send_file(out, as_attachment=True,
+                     download_name=f'Employee360_{ident}.xlsx',
+                     mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
+
 @employee_bp.route('/api/employee/check-duplicate')
 def api_check_duplicate():
     """API: Check if UAN or ESIC already exists — supports re-join detection"""

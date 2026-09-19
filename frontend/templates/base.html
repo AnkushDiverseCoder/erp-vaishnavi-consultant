@@ -530,6 +530,15 @@
                 {% block page_header %}Dashboard{% endblock %}
             </div>
             <div class="top-navbar-right">
+                <!-- ── Global Employee Lookup (UAN / ESIC IP) ── -->
+                <form class="no-print" method="get" action="{{ url_for('employee.employee_lookup') }}"
+                      style="display:inline-flex; align-items:center; margin-right:8px;" title="Find employee by UAN / ESIC IP">
+                    <div style="position:relative; display:inline-flex; align-items:center;">
+                        <i class="bi bi-person-vcard" style="position:absolute; left:9px; font-size:0.7rem; pointer-events:none; color:var(--text-primary); z-index:1;"></i>
+                        <input type="text" name="q" placeholder="UAN / ESIC IP…"
+                               style="padding:4px 10px 4px 26px; background:rgba(var(--primary-rgb),0.10); border:1px solid rgba(var(--primary-rgb),0.28); border-radius:var(--radius-pill); color:var(--text-primary); font-size:0.72rem; width:148px; outline:none;">
+                    </div>
+                </form>
                 <!-- ── Quick Switch Client ── -->
                 {% if qs_all_establishments %}
                 <div class="no-print" style="position:relative; display:inline-flex; align-items:center; margin-right:8px;" title="Quick switch client">
