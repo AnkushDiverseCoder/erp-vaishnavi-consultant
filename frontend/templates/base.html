@@ -395,9 +395,15 @@
             </a>
 
             <a href="{{ url_for('employee.employee_list') }}"
-               class="sidebar-link {% if request.endpoint and 'employee' in request.endpoint %}active{% endif %}">
+               class="sidebar-link {% if request.endpoint == 'employee.employee_list' %}active{% endif %}">
                 <i class="bi bi-people-fill"></i>
                 <span>All Employees</span>
+            </a>
+
+            <a href="{{ url_for('employee.employee_lookup') }}"
+               class="sidebar-link {% if request.endpoint == 'employee.employee_lookup' %}active{% endif %}">
+                <i class="bi bi-person-vcard"></i>
+                <span>Employee 360° Lookup</span>
             </a>
 
             <div style="margin: 15px 12px; padding: 12px; background: var(--surface-alt); border-radius: var(--radius-sm); border: 1px dashed var(--border-strong); text-align: center;">

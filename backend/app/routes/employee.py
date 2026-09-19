@@ -82,6 +82,120 @@ def employee_list():
                            filter_status=filter_status)
 
 
+# ══════════════════════════════════════════════════════════════════
+#  EMPLOYEE 360° LOOKUP — type a UAN / ESIC IP, get the full profile
+#  + complete payroll history combined across establishments.
+#  Read-only. Scoped to the user's establishments.
+# ══════════════════════════════════════════════════════════════════
+def _employee_360(q, user_est_ids):
+    """Build the combined 360° profile for a UAN / ESIC IP.
+    Returns None if nothing matches (within the user's establishments)."""
+    q = (q or '').strip()
+    if not q:
+        return None
+
+    est_filter = Employee.establishment_id.in_(user_est_ids) if user_est_ids else False
+
+    # Seed matches — anyone with this exact UAN or ESIC IP
+    seeds = Employee.query.filter(
+        est_filter,
+        db.or_(Employee.uan_number == q, Employee.esic_ip_number == q)
+    ).all()
+    if not seeds:
+        return None
+
+    # Identify the PERSON: all UANs + ESIC IPs seen on the seed records,
+    # then pull every record (across establishments) that shares any of them.
+    uans = {e.uan_number for e in seeds if e.uan_number}
+    ips = {e.esic_ip_number for e in seeds if e.esic_ip_number}
+    conds = []
+    if uans:
+        conds.append(Employee.uan_number.in_(uans))
+    if ips:
+        conds.append(Employee.esic_ip_number.in_(ips))
+    records = Employee.query.filter(est_filter, db.or_(*conds)).all() if conds else seeds
+
+    # Primary record for biodata = most recent joining (prefer active), richest data.
+    records_sorted = sorted(
+        records,
+        key=lambda e: (1 if e.is_active else 0, e.date_of_joining or date.min),
+        reverse=True
+    )
+    primary = records_sorted[0]
+    rec_ids = [e.id for e in records]
+    est_names = {}
+    for e in records:
+        est_names[e.establishment_id] = e.establishment.company_name if e.establishment else '—'
+
+    # Payroll history across ALL of the person's records, newest first
+    entries = (PayrollEntry.query
+               .filter(PayrollEntry.employee_id.in_(rec_ids))
+               .join(MonthlyPayroll)
+               .order_by(MonthlyPayroll.year.desc(), MonthlyPayroll.month.desc())
+               .all())
+
+    history = []
+    last_contrib = None            # (year, month) of the latest month with an EPF deduction
+    tot = {'months': 0, 'epf_ee': 0, 'epf_er': 0, 'eps': 0, 'esic_ee': 0, 'pt': 0, 'net': 0}
+    for en in entries:
+        mp = en.monthly_payroll
+        emp_rec = next((r for r in records if r.id == en.employee_id), None)
+        epf_ee = round(en.epf_employee or 0)
+        epf_er = round((en.epf_ac01 or 0) + (en.epf_eps or 0) + (en.epf_edli or 0) + (en.epf_admin or 0))
+        history.append({
+            'year': mp.year, 'month': mp.month, 'period': mp.period_display,
+            'est': est_names.get(emp_rec.establishment_id, '—') if emp_rec else '—',
+            'days': en.days_present, 'gross': round(en.total_earnings or 0),
+            'epf_wages': round(en.epf_wages or 0), 'epf_ee': epf_ee, 'epf_er': epf_er,
+            'eps': round(en.epf_eps or 0), 'esic_ee': round(en.esic_employee or 0),
+            'pt': round(en.professional_tax or 0), 'net': round(en.net_pay or 0),
+            'status': mp.status, 'payroll_id': mp.id,
+        })
+        tot['months'] += 1
+        tot['epf_ee'] += epf_ee
+        tot['epf_er'] += epf_er
+        tot['eps'] += round(en.epf_eps or 0)
+        tot['esic_ee'] += round(en.esic_employee or 0)
+        tot['pt'] += round(en.professional_tax or 0)
+        tot['net'] += round(en.net_pay or 0)
+        if epf_ee > 0 and last_contrib is None:
+            last_contrib = (mp.year, mp.month)   # first hit = latest (list is desc)
+
+    first_period = history[-1]['period'] if history else None
+    last_contrib_disp = None
+    if last_contrib:
+        import calendar as _cal
+        last_contrib_disp = f"{_cal.month_name[last_contrib[1]]} {last_contrib[0]}"
+
+    age = None
+    if primary.date_of_birth:
+        _t = date.today()
+        age = _t.year - primary.date_of_birth.year - (
+            (_t.month, _t.day) < (primary.date_of_birth.month, primary.date_of_birth.day))
+
+    return {
+        'primary': primary,
+        'age': age,
+        'records': records,
+        'multi_est': len({e.establishment_id for e in records}) > 1,
+        'est_names': est_names,
+        'history': history,
+        'totals': tot,
+        'last_contribution': last_contrib_disp,
+        'first_period': first_period,
+    }
+
+
+@employee_bp.route('/employees/lookup')
+def employee_lookup():
+    """Employee 360° Lookup — search by UAN or ESIC IP."""
+    q = request.args.get('q', '').strip()
+    user_est_ids = get_user_est_ids()
+    data = _employee_360(q, user_est_ids) if q else None
+    not_found = bool(q) and data is None
+    return render_template('employees/lookup.html', q=q, data=data, not_found=not_found)
+
+
 @employee_bp.route('/api/employee/check-duplicate')
 def api_check_duplicate():
     """API: Check if UAN or ESIC already exists — supports re-join detection"""
