@@ -561,7 +561,7 @@
                                placeholder="Enter custom ceiling ₹">
                         <small class="text-muted">Caps <strong>EPF / Wages</strong>. Gazette S.O. 5109(E) raised ₹15,000 → ₹25,000 (default New).</small>
                     </div>
-                    <div class="col-md-4" id="epsEdliCeilingDiv" style="display:{% if config and config.epf_contribution_type == 'higher' %}none{% else %}block{% endif %};">
+                    <div class="col-md-4" id="epsEdliCeilingDiv" style="display:block;">
                         <label class="form-label" style="font-size:0.8rem;">EPS / EDLI / Admin Ceiling Regime</label>
                         <select name="eps_edli_regime" class="form-select form-select-sm" id="epsEdliRegime" onchange="toggleEpsEdliCustom()">
                             <option value="new" {% if not config or config.eps_edli_regime == 'new' %}selected{% endif %}>New Regime — ₹25,000 — default</option>
@@ -572,7 +572,7 @@
                                value="{{ config.eps_edli_ceiling if config else 25000 }}"
                                style="display:{% if config and config.eps_edli_regime == 'custom' %}block{% else %}none{% endif %};"
                                placeholder="Enter custom ceiling ₹">
-                        <small class="text-muted">Caps <strong>EPS, EDLI &amp; Admin</strong> — set INDEPENDENTLY of EPF (any mix allowed). Never exceeds the EPF wage base.</small>
+                        <small class="text-muted">Caps <strong>EPS, EDLI &amp; Admin</strong> — set INDEPENDENTLY of EPF (any mix). Applies in <strong>every</strong> mode, including Higher Deduction — e.g. EPF on full wages but keep EPS/EDLI at <strong>Old ₹15,000</strong> here. Never exceeds the EPF wage base.</small>
                     </div>
                     <div class="col-md-4 d-flex align-items-end">
                         <div class="form-check" style="padding:6px 0;">
@@ -755,10 +755,13 @@
             document.getElementById('epfApplicable').checked ? 'block' : 'none';
     }
     function toggleEpfCeiling() {
-        var hide = document.getElementById('epfContribType').value === 'higher' ? 'none' : 'block';
-        document.getElementById('epfCeilingDiv').style.display = hide;
+        // Higher Deduction = EPF on full wages (no EPF cap) → hide the EPF wage
+        // ceiling. BUT EPS/EDLI/Admin are ALWAYS capped, so their ceiling
+        // dropdown must stay visible in every mode.
+        var isHigher = document.getElementById('epfContribType').value === 'higher';
+        document.getElementById('epfCeilingDiv').style.display = isHigher ? 'none' : 'block';
         var ed = document.getElementById('epsEdliCeilingDiv');
-        if (ed) ed.style.display = hide;
+        if (ed) ed.style.display = 'block';
     }
     function toggleEpfCeilingCustom() {
         var r = document.getElementById('epfCeilingRegime').value;
