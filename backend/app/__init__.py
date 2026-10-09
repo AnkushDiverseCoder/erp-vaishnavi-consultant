@@ -37,6 +37,14 @@ def create_app():
     # Railway/Render sometimes provide postgres:// but SQLAlchemy needs postgresql://
     if database_url.startswith('postgres://'):
         database_url = database_url.replace('postgres://', 'postgresql://', 1)
+    # Force the psycopg2 driver (the one installed via psycopg2-binary). If the
+    # DATABASE_URL asks for the psycopg v3 dialect (postgresql+psycopg://) the
+    # app would crash at boot with "No module named 'psycopg'". Normalise any
+    # +psycopg / +psycopg2 variant to the plain postgresql:// (psycopg2 default).
+    for _drv in ('postgresql+psycopg://', 'postgresql+psycopg2://'):
+        if database_url.startswith(_drv):
+            database_url = database_url.replace(_drv, 'postgresql://', 1)
+            break
     app.config['SQLALCHEMY_DATABASE_URI'] = database_url
     app.config['DB_TYPE'] = 'postgresql'
 
