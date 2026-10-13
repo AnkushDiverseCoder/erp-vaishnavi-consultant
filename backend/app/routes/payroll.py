@@ -11,6 +11,7 @@ from app.models.employee import Employee
 from datetime import datetime, date
 import calendar
 import math
+import json
 from app.user_context import (current_user_id, is_admin, user_establishments,
                                verify_est_ownership, get_user_est_ids, log_activity,
                                capture_est_from_url)
@@ -1814,6 +1815,17 @@ def save_attendance(payroll_id):
     working_days = payroll.working_days
     entries = PayrollEntry.query.filter_by(monthly_payroll_id=payroll_id).all()
 
+    # ── Authoritative Universal-upload employee set ──
+    # If this payroll was last driven by a Universal Template upload, ONLY the
+    # employees in that sheet are calculated; every other employee is forced to
+    # 0 days (absent) below, regardless of what the submitted form contains.
+    _uni_set = None
+    if getattr(payroll, 'universal_emp_ids', None):
+        try:
+            _uni_set = set(json.loads(payroll.universal_emp_ids))
+        except (ValueError, TypeError):
+            _uni_set = None
+
     # --- Smart absent calculation helpers ---
     # Count rest days (Sundays / configured rest day) in the month
     import datetime as dt
@@ -1881,6 +1893,34 @@ def save_attendance(payroll_id):
             entry.arrear_amount = float(request.form.get(f'arrear_{emp_id}', 0))
             entry.arrear_remark = request.form.get(f'arrear_remark_{emp_id}', '').strip() or None
         except ValueError:
+            continue
+
+        # Universal-upload authority: an employee NOT in the last uploaded sheet
+        # is forced to absent and fully zeroed, no matter what the form sends —
+        # then we skip all further calculation for them (including LOP mode), so
+        # they contribute nothing and are excluded from every report.
+        if _uni_set is not None and emp_id not in _uni_set:
+            entry.days_present = 0
+            entry.days_absent = 0
+            entry.paid_holidays = 0
+            entry.total_payable_days = 0
+            entry.ot_hours = 0
+            entry.ot_amount = 0
+            entry.lop_days = 0
+            entry.weekly_rest_worked_days = 0
+            entry.rate_overrides = None
+            entry.earned_gross = 0
+            entry.bonus_amount = 0
+            entry.arrear_amount = 0
+            entry.total_earnings = 0
+            entry.epf_wages = entry.epf_employee = entry.epf_ac01 = entry.epf_eps = 0
+            entry.epf_admin = entry.epf_edli = entry.epf_employer = 0
+            entry.esic_wages = entry.esic_employee = entry.esic_employer = 0
+            entry.professional_tax = 0
+            entry.other_deduction = 0
+            entry.total_deductions = 0
+            entry.net_pay = 0
+            PayrollEntryHead.query.filter_by(payroll_entry_id=entry.id).delete()
             continue
 
         # --- SMART ABSENT CALCULATION ---
@@ -3863,6 +3903,14 @@ def upload_attendance(payroll_id):
                 entry.weekly_rest_worked_days = 0
                 entry.rate_overrides = None
                 zero_count += 1
+        # Remember this uploaded sheet as the AUTHORITATIVE employee list for the
+        # payroll. save_attendance forces everyone NOT in this list to 0 days on
+        # every calculation — so the payroll/reports reflect ONLY the uploaded
+        # employees, regardless of auto-sync or a stale on-screen form.
+        payroll.universal_emp_ids = json.dumps(sorted(matched_emp_ids))
+    else:
+        # A plain monthly upload is not an authoritative list — lift any restriction.
+        payroll.universal_emp_ids = None
 
     # Refresh total employee count (auto-adds may have increased it)
     payroll.total_employees = PayrollEntry.query.filter_by(monthly_payroll_id=payroll_id).count()

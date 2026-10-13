@@ -455,6 +455,13 @@ class MonthlyPayroll(db.Model):
     # These are National Paid Holidays for this month
     holiday_dates = db.Column(db.String(100), nullable=True)
 
+    # Authoritative employee list from the LAST Universal Template upload —
+    # a JSON array of employee ids. When set, the payroll calculates ONLY these
+    # employees; everyone else is forced to 0 days (absent) on every save, no
+    # matter what the on-screen form shows. NULL = not upload-driven (manual
+    # attendance) → no restriction. Cleared when a non-universal sheet is used.
+    universal_emp_ids = db.Column(db.Text, nullable=True)
+
     # Other Charges — additional billable charges for this month (recorded as Other Income)
     other_charges_description = db.Column(db.String(300), nullable=True)   # e.g., "Annual Return Filing"
     other_charges_amount = db.Column(db.Float, default=0)                   # Amount in ₹

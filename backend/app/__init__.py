@@ -888,6 +888,8 @@ def _auto_migrate_columns(db):
         "ALTER TABLE payroll_configs ADD COLUMN IF NOT EXISTS eps_edli_regime VARCHAR(10) NOT NULL DEFAULT 'new'",
         # Widen exit_reason for the official EPF-department reasons (some are long)
         "ALTER TABLE employees ALTER COLUMN exit_reason TYPE VARCHAR(120)",
+        # Authoritative employee list from the last Universal Template upload
+        "ALTER TABLE monthly_payrolls ADD COLUMN IF NOT EXISTS universal_emp_ids TEXT",
         # Manual "Loss of Pay" system (per-establishment toggle + two manual day counts)
         "ALTER TABLE payroll_configs ADD COLUMN IF NOT EXISTS lop_system_enabled BOOLEAN DEFAULT FALSE",
         "ALTER TABLE payroll_entries ADD COLUMN IF NOT EXISTS lop_days DOUBLE PRECISION DEFAULT 0",
