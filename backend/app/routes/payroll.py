@@ -1600,6 +1600,15 @@ def payroll_process(payroll_id):
                              calendar.monthrange(payroll.year, payroll.month)[1])
         first_day_sync = date(payroll.year, payroll.month, 1)
 
+        # If this payroll is driven by a Universal Template upload, the uploaded
+        # sheet is the AUTHORITATIVE list of who gets paid. So any employee the
+        # auto-sync adds (and who is therefore NOT in the uploaded sheet) must
+        # default to 0 days (absent) — never full pay. Only employees present in
+        # the sheet (or entered manually) are calculated. Payrolls with no
+        # universal upload keep the old default (full working days).
+        _uni_driven = db.session.query(PayrollInputFile.id).filter_by(
+            payroll_id=payroll_id, template_type='universal').first() is not None
+
         q_new = Employee.query.filter(
             Employee.establishment_id == est.id,
             Employee.is_active == True,
@@ -1613,7 +1622,9 @@ def payroll_process(payroll_id):
             for emp_s in new_emps:
                 sal_s = EmployeeSalary.query.filter_by(
                     employee_id=emp_s.id, is_current=True).first()
-                if emp_s.date_of_joining > first_day_sync:
+                if _uni_driven:
+                    def_present = 0          # not in the uploaded sheet → absent
+                elif emp_s.date_of_joining > first_day_sync:
                     rem = (last_day_sync - emp_s.date_of_joining).days + 1
                     def_present = min(rem, payroll.working_days)
                 else:
